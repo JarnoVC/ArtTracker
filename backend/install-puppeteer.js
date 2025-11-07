@@ -3,7 +3,6 @@
 
 const { execSync } = require('child_process');
 const fs = require('fs');
-const path = require('path');
 
 // Only run in production (Render sets NODE_ENV=production)
 if (process.env.NODE_ENV === 'production') {
@@ -44,9 +43,11 @@ if (process.env.NODE_ENV === 'production') {
     } catch (e) {
       console.warn('⚠️  Could not verify Chrome installation');
     }
-  } catch (error: any) {
-    console.error('❌ Error installing Puppeteer browsers:', error.message);
+  } catch (error) {
+    const errorMessage = error && error.message ? error.message : String(error);
+    console.error('❌ Error installing Puppeteer browsers:', errorMessage);
     console.warn('   Chrome may be downloaded on first use, but this may fail');
+    console.warn('   The build will continue - Chrome might be available via system paths');
     // Don't exit - let the build continue, Chrome might be available via system
   }
 } else {
