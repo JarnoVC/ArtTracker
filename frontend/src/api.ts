@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import axios from 'axios';
 
 // Use environment variable for production, fallback to relative path for local dev
