@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "postinstall": "node install-puppeteer.js",
     "start": "node dist/index.js",
     "scrape": "tsx src/scripts/scrape.ts",
     "clear-db": "tsx src/scripts/clear-database.ts"

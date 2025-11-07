@@ -21,6 +21,7 @@ async function getBrowser() {
   if (!browser) {
     console.log('🚀 Launching browser...');
     
+    const fs = require('fs');
     const launchOptions: any = {
       headless: true,
       args: [
@@ -40,88 +41,109 @@ async function getBrowser() {
       ]
     };
 
-    // Try multiple methods to find Chrome executable
+    // Set up cache directory for Puppeteer
+    const cacheDir = process.env.PUPPETEER_CACHE_DIR || '/opt/render/.cache/puppeteer';
+    process.env.PUPPETEER_CACHE_DIR = cacheDir;
+    
+    // Ensure cache directory exists
+    try {
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+        console.log(`   📁 Created cache directory: ${cacheDir}`);
+      }
+    } catch (e) {
+      console.warn(`   ⚠️  Could not create cache directory: ${cacheDir}`);
+    }
+
     let executablePath: string | null = null;
     
-    // Method 1: Try Puppeteer's built-in path
-    try {
-      executablePath = puppeteer.executablePath();
-      console.log(`   📍 Puppeteer suggests: ${executablePath}`);
-    } catch (e) {
-      console.log('   ⚠️  Puppeteer executablePath() failed');
-    }
-
-    // Method 2: Check if the file actually exists
-    if (executablePath) {
-      const fs = require('fs');
+    // Method 1: Search system Chrome locations first (fastest if available)
+    const systemPaths = [
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+      '/snap/bin/chromium'
+    ];
+    
+    for (const path of systemPaths) {
       try {
-        if (!fs.existsSync(executablePath)) {
-          console.warn(`   ⚠️  Chrome not found at: ${executablePath}`);
-          executablePath = null;
+        if (fs.existsSync(path)) {
+          executablePath = path;
+          console.log(`   ✅ Found system Chrome at: ${path}`);
+          break;
         }
       } catch (e) {
-        executablePath = null;
+        // Continue searching
       }
     }
 
-    // Method 3: Try system Chrome locations (common on Linux)
+    // Method 2: Search cache directory (where we might have installed it)
     if (!executablePath) {
-      const fs = require('fs');
-      const systemPaths = [
-        '/usr/bin/google-chrome',
-        '/usr/bin/google-chrome-stable',
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/snap/bin/chromium'
-      ];
-      
-      for (const path of systemPaths) {
-        try {
-          if (fs.existsSync(path)) {
-            executablePath = path;
-            console.log(`   ✅ Found system Chrome at: ${path}`);
-            break;
-          }
-        } catch (e) {
-          // Continue searching
-        }
-      }
-    }
-
-    // Method 4: Try cache directory path (where we installed it)
-    if (!executablePath) {
-      const fs = require('fs');
-      const cacheDir = process.env.PUPPETEER_CACHE_DIR || '/opt/render/.cache/puppeteer';
-      const possiblePaths = [
-        `${cacheDir}/chrome/linux-*/chrome-linux64/chrome`,
-        `${cacheDir}/chrome/linux-*/chrome-linux64/chromium`,
-      ];
-      
-      // Try to find any Chrome executable in cache
       try {
         const { execSync } = require('child_process');
-        const result = execSync(`find ${cacheDir} -name "chrome" -o -name "chromium" 2>/dev/null | head -1`, { encoding: 'utf8' }).trim();
-        if (result) {
+        const result = execSync(`find ${cacheDir} -type f \( -name "chrome" -o -name "chromium" \) 2>/dev/null | head -1`, { 
+          encoding: 'utf8',
+          timeout: 5000
+        }).trim();
+        if (result && fs.existsSync(result)) {
           executablePath = result;
           console.log(`   ✅ Found Chrome in cache: ${executablePath}`);
         }
       } catch (e) {
-        // find command failed, try direct path
+        // find command failed or no Chrome found
       }
     }
 
-    if (executablePath) {
-      launchOptions.executablePath = executablePath;
-    } else {
-      console.warn('   ⚠️  Could not find Chrome, letting Puppeteer use default (may fail)');
+    // Method 3: Try Puppeteer's executablePath (might throw if Chrome not found)
+    if (!executablePath) {
+      try {
+        const suggestedPath = puppeteer.executablePath();
+        if (suggestedPath && fs.existsSync(suggestedPath)) {
+          executablePath = suggestedPath;
+          console.log(`   ✅ Found Chrome via Puppeteer: ${executablePath}`);
+        }
+      } catch (e) {
+        // Puppeteer couldn't find Chrome - that's okay, we'll let it download
+        console.log('   📍 Puppeteer could not locate Chrome, will attempt auto-download');
+      }
     }
 
+    // Set executable path if we found one
+    if (executablePath) {
+      launchOptions.executablePath = executablePath;
+      console.log(`   🎯 Using Chrome at: ${executablePath}`);
+    } else {
+      // Don't set executablePath - let Puppeteer download Chrome automatically
+      console.log('   📥 Chrome not found in any location');
+      console.log('   ⏳ Puppeteer will download Chrome automatically on first launch...');
+      console.log(`   📂 Cache directory: ${cacheDir}`);
+      console.log('   ⏱️  This may take 2-5 minutes on first request');
+    }
+
+    // Launch browser (Puppeteer will download Chrome if needed)
     try {
       browser = await puppeteer.launch(launchOptions);
       console.log('   ✅ Browser launched successfully');
     } catch (error: any) {
-      console.error('   ❌ Failed to launch browser:', error.message);
-      throw new Error(`Failed to launch browser: ${error.message}. Make sure Chrome is installed.`);
+      const errorMsg = error?.message || String(error);
+      console.error('   ❌ Failed to launch browser:', errorMsg);
+      
+      // Provide helpful error message
+      if (errorMsg.includes('Could not find Chrome') || errorMsg.includes('Browser was not found')) {
+        throw new Error(
+          `Chrome installation failed. This could be due to:\n` +
+          `1. Insufficient disk space on Render (Chrome needs ~200MB)\n` +
+          `2. Network issues preventing download\n` +
+          `3. Cache directory permissions\n\n` +
+          `Try:\n` +
+          `- Check Render logs for disk space warnings\n` +
+          `- Verify PUPPETEER_CACHE_DIR environment variable is set\n` +
+          `- Wait a few minutes and try again (first download takes time)\n\n` +
+          `Error: ${errorMsg}`
+        );
+      }
+      throw error;
     }
   }
   return browser;
