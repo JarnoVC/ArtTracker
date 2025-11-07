@@ -7,18 +7,9 @@ dotenv.config();
 
 async function main() {
   console.log('🚀 Starting manual scrape...\n');
-  
-  initDatabase();
-  
-  try {
-    const results = await scrapeAllArtists();
-    
-    console.log('\n✅ Scraping complete!');
-    console.log(JSON.stringify(results, null, 2));
-  } catch (error) {
-    console.error('❌ Scraping failed:', error);
-    process.exit(1);
-  }
+  console.log('⚠️  Note: This script requires a user ID. Use the API endpoints instead.');
+  console.log('   Example: POST /api/scrape/all (requires authentication)');
+  process.exit(1);
 }
 
 main();

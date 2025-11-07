@@ -8,7 +8,7 @@ async function getBrowser() {
   if (!browser) {
     console.log('🚀 Launching browser...');
     browser = await puppeteer.launch({
-      headless: 'new',
+      headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -65,10 +65,12 @@ export async function importFollowingFromUser(userId: number, artstationUsername
 
       // Extract the JSON data
       const jsonData = await page.evaluate(() => {
+        // @ts-ignore - document is available in browser context
         const preElement = document.querySelector('pre');
         if (preElement) {
           return JSON.parse(preElement.textContent || '{}');
         }
+        // @ts-ignore - document is available in browser context
         const bodyText = document.body.textContent;
         if (bodyText) {
           try {
@@ -310,7 +312,8 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
     const result: Array<{ username: string; name?: string; avatar?: string }> = [];
     
     try {
-      const initialState = (window as any).__INITIAL_STATE__;
+      // @ts-ignore - window is available in browser context
+      const initialState = window.__INITIAL_STATE__;
       if (initialState && initialState.following && initialState.following.data) {
         initialState.following.data.forEach((user: any) => {
           if (user.username) {
@@ -339,7 +342,9 @@ async function autoScroll(page: any) {
       let totalHeight = 0;
       const distance = 100;
       const timer = setInterval(() => {
+        // @ts-ignore - document and window are available in browser context
         const scrollHeight = document.body.scrollHeight;
+        // @ts-ignore - window is available in browser context
         window.scrollBy(0, distance);
         totalHeight += distance;
 

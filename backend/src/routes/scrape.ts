@@ -19,7 +19,7 @@ router.post('/artist/:id', async (req, res) => {
     const { optimized } = req.query;
     
     // Verify artist belongs to user
-    const artist = db.getArtistById(artistId, req.user.id);
+    const artist = await db.getArtistById(artistId, req.user.id);
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
     }

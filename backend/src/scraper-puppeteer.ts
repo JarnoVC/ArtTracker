@@ -21,7 +21,7 @@ async function getBrowser() {
   if (!browser) {
     console.log('🚀 Launching browser...');
     browser = await puppeteer.launch({
-      headless: 'new',
+      headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -71,10 +71,12 @@ export async function scrapeArtist(artistId: number, userId: number) {
 
       // Extract the JSON data
       const jsonData = await page.evaluate(() => {
+        // @ts-ignore - document is available in browser context
         const preElement = document.querySelector('pre');
         if (preElement) {
           return JSON.parse(preElement.textContent || '{}');
         }
+        // @ts-ignore - document is available in browser context
         const bodyText = document.body.textContent;
         if (bodyText) {
           try {
@@ -206,7 +208,8 @@ async function scrapeFromProfilePage(artistId: number, userId: number, artist: a
     };
 
     try {
-      const initialState = (window as any).__INITIAL_STATE__;
+      // @ts-ignore - window is available in browser context
+      const initialState = window.__INITIAL_STATE__;
       
       if (initialState) {
         if (initialState.user) {
@@ -298,10 +301,12 @@ export async function checkArtistForUpdates(artistId: number, userId: number): P
     await delay(500);
 
     const jsonData = await page.evaluate(() => {
+      // @ts-ignore - document is available in browser context
       const preElement = document.querySelector('pre');
       if (preElement) {
         return JSON.parse(preElement.textContent || '{}');
       }
+      // @ts-ignore - document is available in browser context
       const bodyText = document.body.textContent;
       if (bodyText) {
         try {
@@ -378,10 +383,12 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
     await delay(500);
 
     const jsonData = await page.evaluate(() => {
+      // @ts-ignore - document is available in browser context
       const preElement = document.querySelector('pre');
       if (preElement) {
         return JSON.parse(preElement.textContent || '{}');
       }
+      // @ts-ignore - document is available in browser context
       const bodyText = document.body.textContent;
       if (bodyText) {
         try {

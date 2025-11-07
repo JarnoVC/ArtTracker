@@ -60,7 +60,7 @@ export function initDatabase(): void {
     .then(() => {
       console.log('✅ Database initialized (PostgreSQL)');
     })
-    .catch((err) => {
+    .catch((err: Error) => {
       console.error('❌ Database connection error:', err);
       console.error('   Make sure DATABASE_URL is correct and the database is accessible');
     });
@@ -76,7 +76,7 @@ async function query(text: string, params?: any[]): Promise<pg.QueryResult> {
 // User operations
 export async function getAllUsers(): Promise<User[]> {
   const result = await query('SELECT * FROM users ORDER BY created_at DESC');
-  return result.rows.map(row => ({
+  return result.rows.map((row: any) => ({
     id: row.id,
     username: row.username,
     artstation_username: row.artstation_username || undefined,
@@ -175,7 +175,7 @@ export async function updateUser(id: number, updates: Partial<User>): Promise<bo
     values
   );
 
-  return result.rowCount !== undefined && result.rowCount > 0;
+  return (result.rowCount ?? 0) > 0;
 }
 
 // Artist operations
@@ -185,7 +185,7 @@ export async function getAllArtists(user_id: number): Promise<Artist[]> {
     [user_id]
   );
   
-  return result.rows.map(row => ({
+  return result.rows.map((row: any) => ({
     id: row.id,
     user_id: row.user_id,
     username: row.username,
@@ -268,12 +268,12 @@ export async function updateArtist(id: number, user_id: number, updates: Partial
     values
   );
 
-  return result.rowCount !== undefined && result.rowCount > 0;
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function deleteArtist(id: number, user_id: number): Promise<boolean> {
   const result = await query('DELETE FROM artists WHERE id = $1 AND user_id = $2', [id, user_id]);
-  return result.rowCount !== undefined && result.rowCount > 0;
+  return (result.rowCount ?? 0) > 0;
 }
 
 // Artwork operations
@@ -295,7 +295,7 @@ export async function getAllArtworks(user_id: number, filters?: { artist_id?: nu
 
   const result = await query(queryText, params);
   
-  return result.rows.map(row => ({
+  return result.rows.map((row: any) => ({
     id: row.id,
     user_id: row.user_id,
     artist_id: row.artist_id,
@@ -326,11 +326,11 @@ export async function getArtworksWithArtistInfo(user_id: number, filters?: { art
   );
   
   const artistsMap = new Map(
-    artistsResult.rows.map(row => [row.id, { username: row.username, display_name: row.display_name }])
+    artistsResult.rows.map((row: any) => [row.id, { username: row.username, display_name: row.display_name }])
   );
 
   return artworks.map(artwork => {
-    const artist = artistsMap.get(artwork.artist_id);
+    const artist = artistsMap.get(artwork.artist_id) as { username: string; display_name?: string } | undefined;
     return {
       ...artwork,
       username: artist?.username,
@@ -399,7 +399,7 @@ export async function addArtwork(
 
 export async function markArtworkSeen(id: number, user_id: number): Promise<boolean> {
   const result = await query('UPDATE artworks SET is_new = 0 WHERE id = $1 AND user_id = $2', [id, user_id]);
-  return result.rowCount !== undefined && result.rowCount > 0;
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function markAllArtworksSeen(user_id: number, artist_id?: number): Promise<number> {
