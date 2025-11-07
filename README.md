@@ -329,3 +329,4 @@ Contributions are welcome! Feel free to:
 
 Made with ❤️ for art enthusiasts
 
+# ArtTracker
