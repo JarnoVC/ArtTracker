@@ -2,6 +2,8 @@
 // This ensures Chrome is available when deploying to cloud platforms like Render
 
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 // Only run in production (Render sets NODE_ENV=production)
 if (process.env.NODE_ENV === 'production') {
@@ -10,22 +12,42 @@ if (process.env.NODE_ENV === 'production') {
   try {
     // Set cache directory for Render
     const cacheDir = process.env.PUPPETEER_CACHE_DIR || '/opt/render/.cache/puppeteer';
-    process.env.PUPPETEER_CACHE_DIR = cacheDir;
     
-    console.log(`   Cache directory: ${cacheDir}`);
+    // Ensure cache directory exists
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+      console.log(`   Created cache directory: ${cacheDir}`);
+    }
+    
+    process.env.PUPPETEER_CACHE_DIR = cacheDir;
+    console.log(`   Using cache directory: ${cacheDir}`);
     
     // Install Chrome/Chromium for Puppeteer
+    console.log('   Downloading Chrome... (this may take a few minutes)');
     execSync('npx puppeteer browsers install chrome', {
       stdio: 'inherit',
       env: {
         ...process.env,
         PUPPETEER_CACHE_DIR: cacheDir
-      }
+      },
+      timeout: 600000 // 10 minutes timeout
     });
-    console.log('✅ Puppeteer browsers installed successfully');
-  } catch (error) {
-    console.warn('⚠️  Warning: Failed to install Puppeteer browsers:', error.message);
-    console.warn('   Chrome will be downloaded on first use');
+    
+    // Verify installation
+    try {
+      const result = execSync(`find ${cacheDir} -name "chrome" -type f 2>/dev/null | head -1`, { encoding: 'utf8' }).trim();
+      if (result) {
+        console.log(`✅ Chrome installed successfully at: ${result}`);
+      } else {
+        console.warn('⚠️  Chrome installation completed but executable not found');
+      }
+    } catch (e) {
+      console.warn('⚠️  Could not verify Chrome installation');
+    }
+  } catch (error: any) {
+    console.error('❌ Error installing Puppeteer browsers:', error.message);
+    console.warn('   Chrome may be downloaded on first use, but this may fail');
+    // Don't exit - let the build continue, Chrome might be available via system
   }
 } else {
   console.log('⏭️  Skipping Puppeteer browser installation (development mode)');
