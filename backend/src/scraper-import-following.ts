@@ -7,16 +7,39 @@ let browser: any = null;
 async function getBrowser() {
   if (!browser) {
     console.log('🚀 Launching browser...');
-    browser = await puppeteer.launch({
+    
+    const launchOptions: any = {
       headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-ipc-flooding-protection',
+        '--single-process'
       ]
-    });
+    };
+
+    // Try to get Chrome executable path from Puppeteer
+    try {
+      const executablePath = puppeteer.executablePath();
+      if (executablePath) {
+        launchOptions.executablePath = executablePath;
+        console.log(`   ✅ Found Chrome at: ${executablePath}`);
+      }
+    } catch (e) {
+      console.warn('   ⚠️  Could not auto-detect Chrome path, using default');
+    }
+
+    browser = await puppeteer.launch(launchOptions);
+    console.log('   ✅ Browser launched successfully');
   }
   return browser;
 }
