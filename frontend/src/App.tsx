@@ -331,7 +331,6 @@ function App() {
           selectedArtistId={selectedArtistId}
           onSelectArtist={setSelectedArtistId}
           onArtistDeleted={handleArtistDeleted}
-          onRefresh={loadArtists}
           onSyncWithArtStation={handleSyncWithArtStation}
         />
         

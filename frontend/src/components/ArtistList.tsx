@@ -8,11 +8,10 @@ interface ArtistListProps {
   selectedArtistId: number | null;
   onSelectArtist: (id: number | null) => void;
   onArtistDeleted: () => void;
-  onRefresh: () => void;
   onSyncWithArtStation: () => void;
 }
 
-function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted, onRefresh, onSyncWithArtStation }: ArtistListProps) {
+function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted, onSyncWithArtStation }: ArtistListProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
