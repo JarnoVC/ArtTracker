@@ -1,0 +1,126 @@
+import { useState } from 'react';
+import { Artist, deleteArtist } from '../api';
+import { toast } from 'react-hot-toast';
+import './ArtistList.css';
+
+interface ArtistListProps {
+  artists: Artist[];
+  selectedArtistId: number | null;
+  onSelectArtist: (id: number | null) => void;
+  onArtistDeleted: () => void;
+  onRefresh: () => void;
+  onSyncWithArtStation: () => void;
+}
+
+function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted, onRefresh, onSyncWithArtStation }: ArtistListProps) {
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleDelete = async (e: React.MouseEvent, artistId: number) => {
+    e.stopPropagation();
+    
+    if (!confirm('Are you sure you want to unfollow this artist?')) {
+      return;
+    }
+
+    setDeletingId(artistId);
+    try {
+      await deleteArtist(artistId);
+      toast.success('Artist removed');
+      onArtistDeleted();
+    } catch (error) {
+      toast.error('Failed to remove artist');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await onSyncWithArtStation();
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  return (
+    <aside className="artist-list">
+      <div className="artist-list-header">
+        <h2>Following ({artists.length})</h2>
+        <button 
+          className={`btn-icon ${isSyncing ? 'syncing' : ''}`}
+          onClick={handleSync} 
+          disabled={isSyncing}
+          title="Sync with ArtStation (re-import following list)"
+        >
+          {isSyncing ? '⏳' : '🔄'}
+        </button>
+      </div>
+
+      <div className="filter-section">
+        <button
+          className={`filter-btn ${selectedArtistId === null ? 'active' : ''}`}
+          onClick={() => onSelectArtist(null)}
+        >
+          📚 All Artists
+        </button>
+      </div>
+
+      <div className="artists-scroll">
+        {artists.length === 0 ? (
+          <div className="empty-state">
+            <p>No artists yet</p>
+            <p className="empty-hint">Click "Add Artist" to start tracking</p>
+          </div>
+        ) : (
+          artists.map((artist) => (
+            <div
+              key={artist.id}
+              className={`artist-card ${selectedArtistId === artist.id ? 'selected' : ''}`}
+              onClick={() => onSelectArtist(artist.id)}
+            >
+              <div className="artist-info">
+                {artist.avatar_url ? (
+                  <img 
+                    src={artist.avatar_url} 
+                    alt={artist.username}
+                    className="artist-avatar"
+                  />
+                ) : (
+                  <div className="artist-avatar-placeholder">
+                    {artist.username[0].toUpperCase()}
+                  </div>
+                )}
+                
+                <div className="artist-details">
+                  <div className="artist-name">
+                    {artist.display_name || artist.username}
+                  </div>
+                  <div className="artist-username">@{artist.username}</div>
+                  {artist.last_checked && (
+                    <div className="artist-last-checked">
+                      Last checked: {new Date(artist.last_checked).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button
+                className="btn-delete"
+                onClick={(e) => handleDelete(e, artist.id)}
+                disabled={deletingId === artist.id}
+                title="Unfollow"
+              >
+                ✕
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </aside>
+  );
+}
+
+export default ArtistList;
+

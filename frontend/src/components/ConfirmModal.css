@@ -1,0 +1,30 @@
+.confirm-modal {
+  max-width: 450px;
+}
+
+.confirm-message {
+  line-height: 1.6;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+.btn-error {
+  background-color: var(--error);
+  color: white;
+}
+
+.btn-error:hover:not(:disabled) {
+  background-color: #dc2626;
+  transform: translateY(-1px);
+}
+
+.btn-warning {
+  background-color: var(--warning);
+  color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background-color: #d97706;
+  transform: translateY(-1px);
+}
+
