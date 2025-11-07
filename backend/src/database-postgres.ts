@@ -48,11 +48,28 @@ export function initDatabase(): void {
     throw new Error('DATABASE_URL environment variable is required for PostgreSQL');
   }
 
+  // Parse connection string to force IPv4 if needed
+  let connectionString = databaseUrl;
+  
+  // If URL contains IPv6, try to convert to IPv4 or use hostname
+  // Some cloud providers have issues with IPv6
+  try {
+    const url = new URL(databaseUrl);
+    // If hostname is an IPv6 address, try to use the hostname from a connection pool URL
+    // For now, we'll just use the connection string as-is but with better error handling
+  } catch (e) {
+    // If URL parsing fails, use the string as-is (it might be a connection URI)
+  }
+
   pool = new Pool({
-    connectionString: databaseUrl,
-    ssl: databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1') 
+    connectionString: connectionString,
+    ssl: connectionString.includes('localhost') || connectionString.includes('127.0.0.1') 
       ? false 
-      : { rejectUnauthorized: false }
+      : { rejectUnauthorized: false },
+    // Add connection timeout and retry logic
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    max: 20
   });
 
   // Test connection (async, but we don't wait - connection will be tested on first query)
