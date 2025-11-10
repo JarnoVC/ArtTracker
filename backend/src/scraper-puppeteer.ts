@@ -24,21 +24,15 @@ async function getBrowser() {
     const fs = require('fs');
     const path = require('path');
     const launchOptions: any = {
-      headless: true,
+      headless: true, // Headless mode (use true for compatibility)
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-        '--disable-background-networking',
-        '--disable-background-timer-throttling',
-        '--disable-renderer-backgrounding',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-ipc-flooding-protection',
-        '--single-process'
+        '--disable-blink-features=AutomationControlled', // Remove automation flags (helps bypass Cloudflare)
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--window-size=1920,1080',
+        '--start-maximized'
       ]
     };
 
@@ -275,21 +269,99 @@ export async function scrapeArtist(artistId: number, userId: number) {
       try {
         await page.setViewport({ width: 1920, height: 1080 });
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        
+        // Remove webdriver property (Cloudflare detects this)
+        await page.evaluateOnNewDocument(() => {
+          // @ts-ignore - navigator is available in browser context
+          Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
+          });
+        });
+        
+        // Add realistic browser headers
+        await page.setExtraHTTPHeaders({
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Cache-Control': 'max-age=0'
+        });
 
-        // Set longer timeouts
-        page.setDefaultNavigationTimeout(90000); // 90 seconds
-        page.setDefaultTimeout(90000);
+        // Set longer timeouts for Cloudflare
+        page.setDefaultNavigationTimeout(180000); // 3 minutes
+        page.setDefaultTimeout(180000);
 
         const apiUrl = `https://www.artstation.com/users/${artist.username}/projects.json?page=${currentPage}`;
         
         console.log(`     Navigating to: ${apiUrl}`);
         await page.goto(apiUrl, { 
           waitUntil: 'domcontentloaded', // Less strict than networkidle2
-          timeout: 90000 // 90 seconds
+          timeout: 180000 // 3 minutes
         });
 
-        // Wait for content to load
-        await delay(2000);
+        // Check if we hit Cloudflare challenge and wait for it to complete
+        let isCloudflare = false;
+        let waitTime = 0;
+        const maxWaitTime = 90000; // Wait up to 90 seconds for Cloudflare
+        const checkInterval = 3000; // Check every 3 seconds
+        
+        while (waitTime < maxWaitTime) {
+          const pageInfo = await page.evaluate(() => {
+            // @ts-ignore - document and window are available in browser context
+            return {
+              // @ts-ignore - document is available in browser context
+              title: document.title,
+              // @ts-ignore - window is available in browser context
+              url: window.location.href,
+              // @ts-ignore - document is available in browser context
+              bodyText: document.body ? document.body.textContent?.substring(0, 500) : ''
+            };
+          });
+          
+          // Check if we're on Cloudflare challenge page
+          if (pageInfo.title.includes('Just a moment') || 
+              pageInfo.title.includes('Please wait') ||
+              pageInfo.bodyText.includes('Please complete a security check') ||
+              pageInfo.bodyText.includes('Checking your browser') ||
+              pageInfo.bodyText.includes('DDoS protection by Cloudflare')) {
+            if (!isCloudflare) {
+              isCloudflare = true;
+              console.log(`     ⏳ Cloudflare challenge detected, waiting for it to complete...`);
+            }
+            console.log(`     ⏳ Still waiting... (${Math.round(waitTime/1000)}s/${Math.round(maxWaitTime/1000)}s)`);
+            await new Promise(resolve => setTimeout(resolve, checkInterval));
+            waitTime += checkInterval;
+            
+            // Try to wait for navigation (Cloudflare might redirect)
+            try {
+              await Promise.race([
+                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: checkInterval }),
+                new Promise(resolve => setTimeout(resolve, checkInterval))
+              ]);
+            } catch (e) {
+              // Navigation might not happen, that's okay
+            }
+          } else {
+            // We're past Cloudflare
+            if (isCloudflare) {
+              console.log(`     ✓ Cloudflare challenge completed after ${Math.round(waitTime/1000)}s!`);
+            }
+            break;
+          }
+        }
+        
+        if (isCloudflare && waitTime >= maxWaitTime) {
+          console.log(`     ⚠️  Cloudflare challenge timed out after ${maxWaitTime/1000}s`);
+        }
+
+        // Wait for content to load after Cloudflare passes
+        await delay(3000);
 
       // Extract the JSON data
       const jsonData = await page.evaluate(() => {
@@ -424,19 +496,97 @@ async function scrapeFromProfilePage(artistId: number, userId: number, artist: a
   try {
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    // Remove webdriver property (Cloudflare detects this)
+    await page.evaluateOnNewDocument(() => {
+      // @ts-ignore - navigator is available in browser context
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+    });
+    
+    // Add realistic browser headers
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Cache-Control': 'max-age=0'
+    });
 
-    // Set longer timeouts
-    page.setDefaultNavigationTimeout(120000); // 2 minutes
-    page.setDefaultTimeout(120000);
+    // Set longer timeouts for Cloudflare
+    page.setDefaultNavigationTimeout(180000); // 3 minutes
+    page.setDefaultTimeout(180000);
     
     console.log(`  → Trying profile page: ${artist.profile_url}`);
     await page.goto(artist.profile_url, { 
-      waitUntil: 'load', // Less strict than networkidle2
-      timeout: 120000 // 2 minutes
+      waitUntil: 'domcontentloaded', // Less strict than networkidle2
+      timeout: 180000 // 3 minutes
     });
 
+    // Check if we hit Cloudflare challenge and wait for it to complete
+    let isCloudflare = false;
+    let waitTime = 0;
+    const maxWaitTime = 90000; // Wait up to 90 seconds for Cloudflare
+    const checkInterval = 3000; // Check every 3 seconds
+    
+    while (waitTime < maxWaitTime) {
+      const pageInfo = await page.evaluate(() => {
+        // @ts-ignore - document and window are available in browser context
+        return {
+          // @ts-ignore - document is available in browser context
+          title: document.title,
+          // @ts-ignore - window is available in browser context
+          url: window.location.href,
+          // @ts-ignore - document is available in browser context
+          bodyText: document.body ? document.body.textContent?.substring(0, 500) : ''
+        };
+      });
+      
+      // Check if we're on Cloudflare challenge page
+      if (pageInfo.title.includes('Just a moment') || 
+          pageInfo.title.includes('Please wait') ||
+          pageInfo.bodyText.includes('Please complete a security check') ||
+          pageInfo.bodyText.includes('Checking your browser') ||
+          pageInfo.bodyText.includes('DDoS protection by Cloudflare')) {
+        if (!isCloudflare) {
+          isCloudflare = true;
+          console.log(`     ⏳ Cloudflare challenge detected, waiting for it to complete...`);
+        }
+        console.log(`     ⏳ Still waiting... (${Math.round(waitTime/1000)}s/${Math.round(maxWaitTime/1000)}s)`);
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        waitTime += checkInterval;
+        
+        // Try to wait for navigation (Cloudflare might redirect)
+        try {
+          await Promise.race([
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: checkInterval }),
+            new Promise(resolve => setTimeout(resolve, checkInterval))
+          ]);
+        } catch (e) {
+          // Navigation might not happen, that's okay
+        }
+      } else {
+        // We're past Cloudflare
+        if (isCloudflare) {
+          console.log(`     ✓ Cloudflare challenge completed after ${Math.round(waitTime/1000)}s!`);
+        }
+        break;
+      }
+    }
+    
+    if (isCloudflare && waitTime >= maxWaitTime) {
+      console.log(`     ⚠️  Cloudflare challenge timed out after ${maxWaitTime/1000}s`);
+    }
+
     console.log(`     Page loaded, waiting for content...`);
-    await delay(5000); // Wait for JavaScript to execute
+    await delay(5000); // Wait for JavaScript to execute after Cloudflare
 
     const data = await page.evaluate(() => {
       const result: any = {
@@ -537,11 +687,79 @@ export async function checkArtistForUpdates(artistId: number, userId: number): P
   const page = await browser.newPage();
   await page.setViewport({ width: 1920, height: 1080 });
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+  
+  // Remove webdriver property (Cloudflare detects this)
+  await page.evaluateOnNewDocument(() => {
+    // @ts-ignore - navigator is available in browser context
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => undefined,
+    });
+  });
+  
+  // Add realistic browser headers
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Cache-Control': 'max-age=0'
+  });
+  
+  page.setDefaultNavigationTimeout(180000);
+  page.setDefaultTimeout(180000);
 
   try {
     const apiUrl = `https://www.artstation.com/users/${artist.username}/projects.json?page=1`;
-    await page.goto(apiUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-    await delay(500);
+    await page.goto(apiUrl, { waitUntil: 'domcontentloaded', timeout: 180000 });
+    
+    // Check if we hit Cloudflare challenge and wait for it to complete (quick check, shorter timeout)
+    let isCloudflare = false;
+    let waitTime = 0;
+    const maxWaitTime = 30000; // Wait up to 30 seconds for Cloudflare (quick check)
+    const checkInterval = 2000; // Check every 2 seconds
+    
+    while (waitTime < maxWaitTime) {
+      const pageInfo = await page.evaluate(() => {
+        // @ts-ignore - document and window are available in browser context
+        return {
+          // @ts-ignore - document is available in browser context
+          title: document.title,
+          // @ts-ignore - document is available in browser context
+          bodyText: document.body ? document.body.textContent?.substring(0, 200) : ''
+        };
+      });
+      
+      // Check if we're on Cloudflare challenge page
+      if (pageInfo.title.includes('Just a moment') || 
+          pageInfo.title.includes('Please wait') ||
+          pageInfo.bodyText.includes('Please complete a security check') ||
+          pageInfo.bodyText.includes('Checking your browser')) {
+        if (!isCloudflare) {
+          isCloudflare = true;
+        }
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        waitTime += checkInterval;
+        
+        try {
+          await Promise.race([
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: checkInterval }),
+            new Promise(resolve => setTimeout(resolve, checkInterval))
+          ]);
+        } catch (e) {
+          // Ignore
+        }
+      } else {
+        break;
+      }
+    }
+    
+    await delay(1000);
 
     const jsonData = await page.evaluate(() => {
       // @ts-ignore - document is available in browser context
@@ -620,10 +838,88 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
     const page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    // Remove webdriver property (Cloudflare detects this)
+    await page.evaluateOnNewDocument(() => {
+      // @ts-ignore - navigator is available in browser context
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+    });
+    
+    // Add realistic browser headers
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Cache-Control': 'max-age=0'
+    });
+    
+    page.setDefaultNavigationTimeout(180000);
+    page.setDefaultTimeout(180000);
 
     const apiUrl = `https://www.artstation.com/users/${artist.username}/projects.json?page=${currentPage}`;
-    await page.goto(apiUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-    await delay(500);
+    await page.goto(apiUrl, { waitUntil: 'domcontentloaded', timeout: 180000 });
+    
+    // Check if we hit Cloudflare challenge and wait for it to complete
+    let isCloudflare = false;
+    let waitTime = 0;
+    const maxWaitTime = 60000; // Wait up to 60 seconds for Cloudflare (shorter for update checks)
+    const checkInterval = 3000; // Check every 3 seconds
+    
+    while (waitTime < maxWaitTime) {
+      const pageInfo = await page.evaluate(() => {
+        // @ts-ignore - document and window are available in browser context
+        return {
+          // @ts-ignore - document is available in browser context
+          title: document.title,
+          // @ts-ignore - window is available in browser context
+          url: window.location.href,
+          // @ts-ignore - document is available in browser context
+          bodyText: document.body ? document.body.textContent?.substring(0, 500) : ''
+        };
+      });
+      
+      // Check if we're on Cloudflare challenge page
+      if (pageInfo.title.includes('Just a moment') || 
+          pageInfo.title.includes('Please wait') ||
+          pageInfo.bodyText.includes('Please complete a security check') ||
+          pageInfo.bodyText.includes('Checking your browser') ||
+          pageInfo.bodyText.includes('DDoS protection by Cloudflare')) {
+        if (!isCloudflare) {
+          isCloudflare = true;
+          console.log(`     ⏳ Cloudflare challenge detected, waiting...`);
+        }
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        waitTime += checkInterval;
+        
+        // Try to wait for navigation (Cloudflare might redirect)
+        try {
+          await Promise.race([
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: checkInterval }),
+            new Promise(resolve => setTimeout(resolve, checkInterval))
+          ]);
+        } catch (e) {
+          // Navigation might not happen, that's okay
+        }
+      } else {
+        // We're past Cloudflare
+        if (isCloudflare) {
+          console.log(`     ✓ Cloudflare challenge completed`);
+        }
+        break;
+      }
+    }
+    
+    // Wait a bit more after Cloudflare passes
+    await delay(2000);
 
     const jsonData = await page.evaluate(() => {
       // @ts-ignore - document is available in browser context
