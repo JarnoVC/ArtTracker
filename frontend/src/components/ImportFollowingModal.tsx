@@ -170,7 +170,7 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
                 >
                   {isLoading ? (
                     <>
-                      <span className="spinner">⏳</span>
+                      <span className="spinner">🔄</span>
                       Importing...
                     </>
                   ) : (

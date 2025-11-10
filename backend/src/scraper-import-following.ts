@@ -695,11 +695,18 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
     let artists: Array<{ username: string; name?: string; avatar?: string }> = [];
     
     // Check if we got any API responses first (most reliable)
+    let totalCount: number | null = null;
     if (apiResponses.length > 0) {
       console.log(`     Found ${apiResponses.length} API response(s), extracting data...`);
       
       for (const apiResponse of apiResponses) {
         const apiData = apiResponse.data;
+        
+        // Store total_count if available (for pagination check)
+        if (apiData && typeof apiData.total_count === 'number') {
+          totalCount = apiData.total_count;
+          console.log(`     📊 Total count from API: ${totalCount}`);
+        }
         
         // Try different data structures - based on your JSON: { data: [...], total_count: ... }
         if (apiData && apiData.data && Array.isArray(apiData.data)) {
@@ -755,8 +762,102 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
         }
       }
       
+      // Check if we need to fetch more pages
+      if (totalCount !== null && artists.length < totalCount) {
+        console.log(`     ⚠️  Only fetched ${artists.length} of ${totalCount} artists - need to load more pages`);
+        console.log(`     📄 Scrolling and waiting for additional API calls...`);
+        
+        // Scroll more aggressively to trigger lazy loading of additional pages
+        await autoScroll(page);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Scroll again and wait more
+        await autoScroll(page);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        // Re-check API responses after scrolling
+        console.log(`     🔍 Re-checking API responses after scroll (now have ${apiResponses.length} responses)...`);
+        for (const apiResponse of apiResponses) {
+          const apiData = apiResponse.data;
+          if (apiData && apiData.data && Array.isArray(apiData.data)) {
+            apiData.data.forEach((user: any) => {
+              if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
+                artists.push({
+                  username: user.username,
+                  name: user.full_name || user.display_name || user.username,
+                  avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
+                });
+              }
+            });
+          }
+        }
+        
+        console.log(`     📊 After scrolling: ${artists.length} of ${totalCount} artists fetched`);
+        
+        // If still not all artists, try fetching additional pages directly via API using fetch
+        if (artists.length < totalCount) {
+          console.log(`     🔄 Attempting to fetch remaining pages via API...`);
+          const artistsPerPage = 20; // ArtStation typically returns 20 per page
+          const totalPages = Math.ceil(totalCount / artistsPerPage);
+          console.log(`     📄 Estimated ${totalPages} page(s) total`);
+          
+          // Try to fetch page 2 and beyond if we don't have all artists
+          // Use fetch within the page context to avoid navigation issues
+          for (let pageNum = 2; pageNum <= totalPages && artists.length < totalCount; pageNum++) {
+            try {
+              console.log(`     📥 Fetching page ${pageNum} via API...`);
+              const apiUrl = `https://www.artstation.com/users/${artstationUsername}/following.json?page=${pageNum}`;
+              
+              // Use page.evaluate to fetch the API directly (stays on current page)
+              const jsonData = await page.evaluate(async (url) => {
+                try {
+                  // @ts-ignore - fetch is available in browser context
+                  const response = await fetch(url, {
+                    headers: {
+                      'Accept': 'application/json',
+                      'Content-Type': 'application/json'
+                    }
+                  });
+                  if (response.ok) {
+                    return await response.json();
+                  }
+                  return null;
+                } catch (e) {
+                  return null;
+                }
+              }, apiUrl);
+              
+              if (jsonData && jsonData.data && Array.isArray(jsonData.data)) {
+                jsonData.data.forEach((user: any) => {
+                  if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
+                    artists.push({
+                      username: user.username,
+                      name: user.full_name || user.display_name || user.username,
+                      avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
+                    });
+                  }
+                });
+                console.log(`     ✓ Fetched ${jsonData.data.length} artists from page ${pageNum} (total: ${artists.length}/${totalCount})`);
+              } else {
+                console.log(`     ⚠️  Page ${pageNum} returned no data or invalid format`);
+                // If a page returns no data, we've probably reached the end
+                break;
+              }
+            } catch (pageError: any) {
+              console.log(`     ⚠️  Failed to fetch page ${pageNum}: ${pageError.message}`);
+              // Continue to next page, but if we get multiple failures, we might have reached the end
+            }
+            
+            // Small delay between page fetches to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+          console.log(`     📊 Final count: ${artists.length} of ${totalCount} artists fetched`);
+        }
+      }
+      
       if (artists.length > 0) {
-        console.log(`     ✓ Successfully extracted ${artists.length} artists from API responses`);
+        console.log(`     ✓ Successfully extracted ${artists.length} artist(s) from API responses${totalCount !== null ? ` (total: ${totalCount})` : ''}`);
         page.off('response', responseHandler);
         return artists;
       } else {

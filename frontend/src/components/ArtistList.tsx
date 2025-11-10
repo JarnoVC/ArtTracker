@@ -9,9 +9,10 @@ interface ArtistListProps {
   onSelectArtist: (id: number | null) => void;
   onArtistDeleted: () => void;
   onSyncWithArtStation: () => void;
+  isLoading?: boolean;
 }
 
-function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted, onSyncWithArtStation }: ArtistListProps) {
+function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted, onSyncWithArtStation, isLoading = false }: ArtistListProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -67,7 +68,13 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
       </div>
 
       <div className="artists-scroll">
-        {artists.length === 0 ? (
+        {isLoading || isSyncing ? (
+          <div className="empty-state">
+            <div style={{ fontSize: '32px', marginBottom: '1rem' }}>🔄</div>
+            <p>Loading artists...</p>
+            <p className="empty-hint">Please wait</p>
+          </div>
+        ) : artists.length === 0 ? (
           <div className="empty-state">
             <p>No artists yet</p>
             <p className="empty-hint">Click "Add Artist" to start tracking</p>

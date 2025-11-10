@@ -10,9 +10,10 @@ interface ArtworkGridProps {
   onArtworkSeen: () => void;
   selectedArtist?: Artist;
   onScrapeArtist?: (artistId: number) => Promise<void>;
+  isLoading?: boolean;
 }
 
-function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, selectedArtist, onScrapeArtist }: ArtworkGridProps) {
+function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, selectedArtist, onScrapeArtist, isLoading = false }: ArtworkGridProps) {
   const newCount = artworks.filter(a => a.is_new).length;
   const [isScraping, setIsScraping] = useState(false);
 
@@ -91,7 +92,13 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
         </div>
       </div>
 
-      {artworks.length === 0 ? (
+      {isLoading ? (
+        <div className="empty-artworks">
+          <div style={{ fontSize: '48px', marginBottom: '1rem' }}>🔄</div>
+          <p>Loading artworks...</p>
+          <p className="empty-hint">Please wait</p>
+        </div>
+      ) : artworks.length === 0 ? (
         <div className="empty-artworks">
           <p>
             {showNewOnly 

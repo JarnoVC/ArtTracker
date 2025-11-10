@@ -24,6 +24,8 @@ function App() {
   const [scrapeProgressArtists, setScrapeProgressArtists] = useState<Artist[]>([]);
   const [newCount, setNewCount] = useState(0);
   const [showNewOnly, setShowNewOnly] = useState(false);
+  const [isLoadingArtists, setIsLoadingArtists] = useState(false);
+  const [isLoadingArtworks, setIsLoadingArtworks] = useState(false);
 
   // Check authentication on mount (only once)
   useEffect(() => {
@@ -108,16 +110,26 @@ function App() {
     }
   }, [selectedArtistId, showNewOnly, isAuthenticated]);
 
-  const loadArtists = async () => {
+  const loadArtists = async (showLoading = false) => {
+    if (showLoading) {
+      setIsLoadingArtists(true);
+    }
     try {
       const data = await getArtists();
       setArtists(data);
     } catch (error) {
       toast.error('Failed to load artists');
+    } finally {
+      if (showLoading) {
+        setIsLoadingArtists(false);
+      }
     }
   };
 
-  const loadArtworks = async () => {
+  const loadArtworks = async (showLoading = false) => {
+    if (showLoading) {
+      setIsLoadingArtworks(true);
+    }
     try {
       // Show only latest per artist when viewing "All Artists"
       const latestPerArtist = selectedArtistId === null;
@@ -125,6 +137,10 @@ function App() {
       setArtworks(data);
     } catch (error) {
       toast.error('Failed to load artworks');
+    } finally {
+      if (showLoading) {
+        setIsLoadingArtworks(false);
+      }
     }
   };
 
@@ -199,6 +215,7 @@ function App() {
   const handleSyncWithArtStation = async () => {
     // For sync, we don't need to provide username - it uses the user's ArtStation username from their profile
     // If they don't have one, the backend will return an error
+    setIsLoadingArtists(true);
     try {
       toast.loading('Syncing with ArtStation...', { id: 'sync' });
       
@@ -227,9 +244,9 @@ function App() {
         toast.success('Sync complete!');
       }
       
-      await loadArtists();
+      await loadArtists(true);
       // Reload artworks in case some were removed or new ones were added
-      await loadArtworks();
+      await loadArtworks(true);
       // Update the new count counter in the header
       await loadNewCount();
     } catch (error: any) {
@@ -237,6 +254,8 @@ function App() {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to sync with ArtStation';
       toast.error(`Failed to sync: ${errorMessage}`);
       console.error('Sync error:', error);
+    } finally {
+      setIsLoadingArtists(false);
     }
   };
 
@@ -332,6 +351,7 @@ function App() {
           onSelectArtist={setSelectedArtistId}
           onArtistDeleted={handleArtistDeleted}
           onSyncWithArtStation={handleSyncWithArtStation}
+          isLoading={isLoadingArtists}
         />
         
         <ArtworkGrid 
@@ -341,6 +361,7 @@ function App() {
           onArtworkSeen={handleArtworkSeen}
           selectedArtist={artists.find(a => a.id === selectedArtistId)}
           onScrapeArtist={handleScrapeSingleArtist}
+          isLoading={isLoadingArtworks}
         />
       </div>
       
