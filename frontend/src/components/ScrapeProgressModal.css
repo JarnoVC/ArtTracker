@@ -5,6 +5,7 @@
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.85);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -88,8 +89,35 @@
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--primary), var(--secondary));
-  transition: width 0.3s ease;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 /* Stats */
@@ -168,12 +196,26 @@
 
 .artist-progress-item.current {
   border-color: var(--primary);
+  background-color: rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  transform: scale(1.02);
+  z-index: 1;
+  position: relative;
+}
+
+.artist-progress-item.checking,
+.artist-progress-item.scraping {
+  border-color: var(--primary);
   background-color: rgba(99, 102, 241, 0.1);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
 .artist-progress-item.completed {
-  opacity: 0.7;
+  border-color: var(--success);
+  background-color: rgba(16, 185, 129, 0.05);
+}
+
+.artist-progress-item.skipped {
+  opacity: 0.6;
 }
 
 .artist-progress-item.failed {

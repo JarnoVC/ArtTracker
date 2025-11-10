@@ -53,109 +53,93 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
   }, []);
 
   const scrapeArtists = async () => {
-    // If we have many artists, use the bulk scrape endpoint (more efficient)
-    if (artists.length > 5) {
-      try {
-        console.log(`Using bulk scrape endpoint for ${artists.length} artists...`);
-        const response = await apiClient.post('/scrape/all', {});
-        const results = response.data;
-        
-        // Map results to progress state
-        const resultsMap = new Map<string, any>();
-        if (results.results && Array.isArray(results.results)) {
-          results.results.forEach((r: any) => {
-            if (r.artist) {
-              resultsMap.set(r.artist.toLowerCase(), r);
-            }
-          });
-        }
-        
-        // Update progress based on results
-        setProgress(prev => prev.map((p) => {
-          const result = resultsMap.get(p.username.toLowerCase());
-          if (result) {
-            if (result.status === 'skipped') {
-              return { ...p, status: 'skipped', reason: result.reason || 'no_updates', newArtworks: 0 };
-            } else if (result.status === 'completed') {
-              return { ...p, status: 'completed', newArtworks: result.new_artworks || 0 };
-            } else if (result.status === 'failed') {
-              return { ...p, status: 'failed', error: result.error || 'Failed to scrape' };
-            }
-          }
-          // If not found in results, mark as failed
-          return { ...p, status: 'failed', error: 'Not processed' };
-        }));
-        
-        setIsComplete(true);
-        return;
-      } catch (error: any) {
-        console.error('Bulk scrape failed, falling back to individual scraping:', error);
-        // Fall through to individual scraping
-      }
-    }
-    
-    // Individual scraping (for smaller lists or if bulk fails)
+    // Always use individual requests for real-time progress updates
+    // This provides better UX as users can see each artist being processed
     for (let i = 0; i < artists.length; i++) {
       const artist = artists[i];
       
-      // Step 1: Check for updates (optimized check)
-      setProgress(prev => prev.map((p, idx) => 
-        idx === i ? { ...p, status: 'checking' } : p
-      ));
+      // Update status to checking and current index
       setCurrentIndex(i);
+      setProgress(prev => {
+        const updated = [...prev];
+        updated[i] = { ...updated[i], status: 'checking' };
+        return updated;
+      });
+
+      // Give React time to render the update
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
         // Use optimized scraping endpoint (checks first, only scrapes if updates exist)
-        console.log(`Scraping artist ${artist.id} (${artist.username})...`);
+        console.log(`[${i + 1}/${artists.length}] Scraping artist ${artist.id} (${artist.username})...`);
+        
+        // Update to scraping status
+        setProgress(prev => {
+          const updated = [...prev];
+          updated[i] = { ...updated[i], status: 'scraping' };
+          return updated;
+        });
+        
+        // Small delay to show scraping state
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
         const response = await apiClient.post(`/scrape/artist/${artist.id}?optimized=true`, {});
         
         const result = response.data;
         
         // Handle skipped status (no updates)
         if (result.status === 'skipped') {
-          setProgress(prev => prev.map((p, idx) => 
-            idx === i ? { 
-              ...p, 
+          setProgress(prev => {
+            const updated = [...prev];
+            updated[i] = { 
+              ...updated[i], 
               status: 'skipped',
               reason: result.reason || 'no_updates',
               newArtworks: 0
-            } : p
-          ));
+            };
+            return updated;
+          });
+          console.log(`  ✓ ${artist.username}: Skipped (no updates)`);
         } else {
           // Has updates, was scraped
-          setProgress(prev => prev.map((p, idx) => 
-            idx === i ? { 
-              ...p, 
+          const newArtworks = result.new_artworks || 0;
+          const totalFound = result.total_found || 0;
+          setProgress(prev => {
+            const updated = [...prev];
+            updated[i] = { 
+              ...updated[i], 
               status: 'completed',
-              newArtworks: result.new_artworks || 0
-            } : p
-          ));
+              newArtworks: newArtworks
+            };
+            return updated;
+          });
+          console.log(`  ✓ ${artist.username}: Completed (${newArtworks} new, ${totalFound} total)`);
         }
       } catch (error: any) {
-        console.error(`Error scraping artist ${artist.id}:`, error);
-        console.error(`Error details:`, {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          message: error.message,
-          url: error.config?.url,
-          baseURL: error.config?.baseURL
-        });
+        console.error(`  ✗ Error scraping artist ${artist.id} (${artist.username}):`, error);
         const errorMessage = error.response?.data?.error || error.message || 'Failed to scrape';
-        setProgress(prev => prev.map((p, idx) => 
-          idx === i ? { 
-            ...p, 
+        setProgress(prev => {
+          const updated = [...prev];
+          updated[i] = { 
+            ...updated[i], 
             status: 'failed',
             error: errorMessage
-          } : p
-        ));
+          };
+          return updated;
+        });
       }
 
-      // Small delay between artists
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Small delay between artists to avoid overwhelming the backend
+      // Also allows UI to update smoothly and shows progress
+      if (i < artists.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
     }
 
+    // Clear current index when done
+    setCurrentIndex(-1);
     setIsComplete(true);
+    console.log(`✅ All artists processed!`);
   };
 
   const completedCount = progress.filter(p => p.status === 'completed').length;
@@ -183,9 +167,9 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
               </span>
               <span className="progress-percent">{progressPercent}%</span>
             </div>
-            <div className="progress-bar">
+            <div className="progress-bar" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Scraping progress">
               <div 
-                className="progress-fill" 
+                className="progress-fill"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -225,13 +209,16 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
           <div className="artist-progress-list">
             {progress.map((artist, index) => (
               <div 
-                key={artist.id} 
+                key={`${artist.id}-${artist.status}-${index}`}
                 className={`artist-progress-item ${artist.status} ${index === currentIndex && !isComplete ? 'current' : ''}`}
               >
                 <div className="artist-progress-icon">
                   {artist.status === 'pending' && '⏳'}
-                  {(artist.status === 'checking' || artist.status === 'scraping') && (
-                    <span className="spinner-small">🔄</span>
+                  {artist.status === 'checking' && (
+                    <span className="spinner-small" title="Checking for updates">🔄</span>
+                  )}
+                  {artist.status === 'scraping' && (
+                    <span className="spinner-small" title="Scraping artworks">⏳</span>
                   )}
                   {artist.status === 'completed' && '✓'}
                   {artist.status === 'skipped' && '⏭'}
@@ -242,6 +229,9 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
                   <span className="artist-progress-name">@{artist.username}</span>
                   {artist.status === 'checking' && (
                     <span className="artist-progress-result">Checking...</span>
+                  )}
+                  {artist.status === 'scraping' && (
+                    <span className="artist-progress-result">Scraping...</span>
                   )}
                   {artist.status === 'completed' && artist.newArtworks !== undefined && (
                     <span className="artist-progress-result">
