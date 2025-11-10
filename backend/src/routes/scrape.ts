@@ -16,20 +16,28 @@ router.post('/artist/:id', async (req, res) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
     const artistId = parseInt(req.params.id);
-    const { optimized } = req.query;
+    const optimized = req.query.optimized === 'true' || req.query.optimized === true;
+    
+    console.log(`📥 Scrape request: artistId=${artistId}, userId=${req.user.id}, optimized=${optimized}`);
     
     // Verify artist belongs to user
     const artist = await db.getArtistById(artistId, req.user.id);
     if (!artist) {
+      console.log(`❌ Artist ${artistId} not found for user ${req.user.id}`);
       return res.status(404).json({ error: 'Artist not found' });
     }
     
+    console.log(`✓ Found artist: ${artist.username} (ID: ${artistId})`);
+    
     // Use optimized scraping if requested (default for "Check for Updates")
-    if (optimized === 'true') {
+    if (optimized) {
+      console.log(`  → Using optimized scraping (check first, then scrape if updates exist)`);
       // First check if there are updates
       const checkResult = await checkArtistForUpdates(artistId, req.user.id);
+      console.log(`  → Check result: hasUpdates=${checkResult.hasUpdates}`);
       
       if (!checkResult.hasUpdates) {
+        console.log(`  → No updates, skipping scrape`);
         return res.json({
           artist: artist.username,
           status: 'skipped',
@@ -40,11 +48,15 @@ router.post('/artist/:id', async (req, res) => {
       }
       
       // Has updates, use optimized scraping
+      console.log(`  → Has updates, starting optimized scrape...`);
       const result = await scrapeArtistUpdates(artistId, req.user.id);
+      console.log(`  → Optimized scrape complete: ${result.new_artworks} new artworks`);
       res.json(result);
     } else {
       // Full scrape (for initial imports)
+      console.log(`  → Using full scrape (for initial imports)`);
       const result = await scrapeArtist(artistId, req.user.id);
+      console.log(`  → Full scrape complete: ${result.total_found} total, ${result.new_artworks} new`);
       res.json(result);
     }
   } catch (error: any) {

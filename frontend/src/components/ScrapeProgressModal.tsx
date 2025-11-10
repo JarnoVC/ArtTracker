@@ -3,6 +3,26 @@ import { Artist, getAuthToken } from '../api';
 import axios from 'axios';
 import './ScrapeProgressModal.css';
 
+// Use the same API_BASE as api.ts
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+
+// Create axios instance with base URL and default auth header
+const apiClient = axios.create({
+  baseURL: API_BASE,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// Add auth token interceptor
+apiClient.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 interface ScrapeProgressModalProps {
   artists: Artist[];
   onComplete: () => void;
@@ -33,6 +53,48 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
   }, []);
 
   const scrapeArtists = async () => {
+    // If we have many artists, use the bulk scrape endpoint (more efficient)
+    if (artists.length > 5) {
+      try {
+        console.log(`Using bulk scrape endpoint for ${artists.length} artists...`);
+        const response = await apiClient.post('/scrape/all', {});
+        const results = response.data;
+        
+        // Map results to progress state
+        const resultsMap = new Map<string, any>();
+        if (results.results && Array.isArray(results.results)) {
+          results.results.forEach((r: any) => {
+            if (r.artist) {
+              resultsMap.set(r.artist.toLowerCase(), r);
+            }
+          });
+        }
+        
+        // Update progress based on results
+        setProgress(prev => prev.map((p) => {
+          const result = resultsMap.get(p.username.toLowerCase());
+          if (result) {
+            if (result.status === 'skipped') {
+              return { ...p, status: 'skipped', reason: result.reason || 'no_updates', newArtworks: 0 };
+            } else if (result.status === 'completed') {
+              return { ...p, status: 'completed', newArtworks: result.new_artworks || 0 };
+            } else if (result.status === 'failed') {
+              return { ...p, status: 'failed', error: result.error || 'Failed to scrape' };
+            }
+          }
+          // If not found in results, mark as failed
+          return { ...p, status: 'failed', error: 'Not processed' };
+        }));
+        
+        setIsComplete(true);
+        return;
+      } catch (error: any) {
+        console.error('Bulk scrape failed, falling back to individual scraping:', error);
+        // Fall through to individual scraping
+      }
+    }
+    
+    // Individual scraping (for smaller lists or if bulk fails)
     for (let i = 0; i < artists.length; i++) {
       const artist = artists[i];
       
@@ -44,11 +106,8 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
 
       try {
         // Use optimized scraping endpoint (checks first, only scrapes if updates exist)
-        // Get token dynamically for each request
-        const token = getAuthToken();
-        const response = await axios.post(`/api/scrape/artist/${artist.id}?optimized=true`, {}, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
+        console.log(`Scraping artist ${artist.id} (${artist.username})...`);
+        const response = await apiClient.post(`/scrape/artist/${artist.id}?optimized=true`, {});
         
         const result = response.data;
         
@@ -74,6 +133,14 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
         }
       } catch (error: any) {
         console.error(`Error scraping artist ${artist.id}:`, error);
+        console.error(`Error details:`, {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          message: error.message,
+          url: error.config?.url,
+          baseURL: error.config?.baseURL
+        });
         const errorMessage = error.response?.data?.error || error.message || 'Failed to scrape';
         setProgress(prev => prev.map((p, idx) => 
           idx === i ? { 
@@ -85,7 +152,7 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
       }
 
       // Small delay between artists
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     setIsComplete(true);
