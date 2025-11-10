@@ -1,5 +1,7 @@
 // Install Puppeteer browsers in production
-// This ensures Chrome is available when deploying to cloud platforms like Render
+// NOTE: On Render free tier, Chrome installation during build may timeout.
+// This script skips Chrome installation during build to avoid timeouts.
+// Chrome will be installed at runtime on first use instead.
 
 const { execSync } = require('child_process');
 const fs = require('fs');
@@ -7,110 +9,79 @@ const path = require('path');
 
 // Only run in production (Render sets NODE_ENV=production)
 if (process.env.NODE_ENV === 'production') {
-  console.log('🔧 Installing Puppeteer browsers for production...');
+  console.log('🔧 Checking Chrome availability...');
   
+  // Set cache directory for Render
+  const cacheDir = process.env.PUPPETEER_CACHE_DIR || '/opt/render/.cache/puppeteer';
+  
+  // Ensure cache directory exists
   try {
-    // Set cache directory for Render
-    const cacheDir = process.env.PUPPETEER_CACHE_DIR || '/opt/render/.cache/puppeteer';
-    
-    // Ensure cache directory exists with proper permissions
     if (!fs.existsSync(cacheDir)) {
       fs.mkdirSync(cacheDir, { recursive: true, mode: 0o755 });
       console.log(`   📁 Created cache directory: ${cacheDir}`);
     }
-    
-    // Verify write permissions
-    try {
-      fs.accessSync(cacheDir, fs.constants.W_OK);
-      console.log(`   ✅ Cache directory is writable: ${cacheDir}`);
-    } catch (e) {
-      console.warn(`   ⚠️  Cache directory may not be writable: ${cacheDir}`);
-    }
-    
-    // Set environment variables for Puppeteer
-    process.env.PUPPETEER_CACHE_DIR = cacheDir;
-    process.env.PUPPETEER_DOWNLOAD_PATH = cacheDir;
-    console.log(`   📂 Using cache directory: ${cacheDir}`);
-    
-    // Install Chrome/Chromium for Puppeteer
-    console.log('   📥 Downloading Chrome... (this may take 3-5 minutes)');
-    console.log('   ⏳ Please wait, this is a one-time setup...');
-    
-    execSync('npx puppeteer browsers install chrome', {
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        PUPPETEER_CACHE_DIR: cacheDir,
-        PUPPETEER_DOWNLOAD_PATH: cacheDir,
-        PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false'
-      },
-      timeout: 600000 // 10 minutes timeout
-    });
-    
-    // Verify installation by checking multiple possible locations
-    console.log('   🔍 Verifying Chrome installation...');
-    let chromeFound = false;
-    
-    // Method 1: Use find command
-    try {
-      const result = execSync(
-        `find "${cacheDir}" -type f -name "chrome" -executable 2>/dev/null | head -1`,
-        { encoding: 'utf8', timeout: 10000 }
-      ).trim();
-      if (result && fs.existsSync(result)) {
-        console.log(`   ✅ Chrome found at: ${result}`);
-        chromeFound = true;
-      }
-    } catch (e) {
-      // find failed, try other methods
-    }
-    
-    // Method 2: Check Puppeteer cache structure
-    if (!chromeFound) {
-      try {
-        const chromeCacheDir = path.join(cacheDir, 'chrome');
-        if (fs.existsSync(chromeCacheDir)) {
-          const entries = fs.readdirSync(chromeCacheDir);
-          for (const entry of entries) {
-            const platformDir = path.join(chromeCacheDir, entry);
-            if (fs.statSync(platformDir).isDirectory()) {
-              const subEntries = fs.readdirSync(platformDir);
-              for (const subEntry of subEntries) {
-                if (subEntry.startsWith('chrome-')) {
-                  const chromeDir = path.join(platformDir, subEntry);
-                  const chromeExe = path.join(chromeDir, 'chrome');
-                  if (fs.existsSync(chromeExe)) {
-                    console.log(`   ✅ Chrome found in cache structure: ${chromeExe}`);
-                    chromeFound = true;
-                    break;
-                  }
-                }
-              }
-              if (chromeFound) break;
-            }
-          }
-        }
-      } catch (e) {
-        // Directory structure check failed
-      }
-    }
-    
-    if (chromeFound) {
-      console.log('   ✅ Chrome installation verified successfully!');
-    } else {
-      console.warn('   ⚠️  Chrome installation completed but executable not found in expected location');
-      console.warn('   💡 Chrome may still work if Puppeteer can locate it at runtime');
-    }
-  } catch (error) {
-    const errorMessage = error && error.message ? error.message : String(error);
-    console.error('   ❌ Error installing Puppeteer browsers:', errorMessage);
-    console.error('   ⚠️  Build will continue, but Chrome may not be available at runtime');
-    console.error('   💡 You may need to install Chrome manually or check disk space');
-    // Don't exit - let the build continue
-    process.exitCode = 0; // Ensure build doesn't fail
+  } catch (e) {
+    console.warn(`   ⚠️  Could not create cache directory: ${cacheDir}`);
   }
+  
+  // Check if system Chrome is available (fastest option)
+  const systemChromes = [
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium'
+  ];
+  
+  let systemChromeFound = false;
+  for (const chromePath of systemChromes) {
+    try {
+      if (fs.existsSync(chromePath)) {
+        console.log(`   ✅ System Chrome found at: ${chromePath}`);
+        systemChromeFound = true;
+        break;
+      }
+    } catch (e) {
+      // Continue checking
+    }
+  }
+  
+  // Check if Chrome is already installed in cache
+  let cachedChromeFound = false;
+  if (!systemChromeFound) {
+    try {
+      const chromeCacheDir = path.join(cacheDir, 'chrome');
+      if (fs.existsSync(chromeCacheDir)) {
+        // Quick check if Chrome exists in cache
+        const result = execSync(
+          `find "${cacheDir}" -type f -name "chrome" -executable 2>/dev/null | head -1`,
+          { encoding: 'utf8', timeout: 5000 }
+        ).trim();
+        if (result && fs.existsSync(result)) {
+          console.log(`   ✅ Cached Chrome found at: ${result}`);
+          cachedChromeFound = true;
+        }
+      }
+    } catch (e) {
+      // No cached Chrome found - that's okay
+    }
+  }
+  
+  if (systemChromeFound || cachedChromeFound) {
+    console.log('   ✅ Chrome is available for use');
+    console.log('   💡 Chrome will be used at runtime');
+  } else {
+    console.log('   ⚠️  Chrome not found during build');
+    console.log('   💡 Chrome will be installed at runtime on first use');
+    console.log('   📝 This is expected on Render free tier to avoid build timeouts');
+  }
+  
+  // Don't install Chrome during build to avoid timeouts
+  // Chrome will be installed at runtime when needed
+  console.log('   ✅ Build can continue - Chrome installation skipped');
+  
 } else {
-  console.log('⏭️  Skipping Puppeteer browser installation (development mode)');
+  console.log('⏭️  Skipping Chrome check (development mode)');
   console.log('   💡 Chrome will be downloaded automatically when needed');
 }
 

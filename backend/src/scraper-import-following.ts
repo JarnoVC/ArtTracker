@@ -149,11 +149,62 @@ async function getBrowser() {
       launchOptions.executablePath = executablePath;
       console.log(`   🎯 Using Chrome at: ${executablePath}`);
     } else {
-      // Last resort: Let Puppeteer try to find/download Chrome
-      // This will use PUPPETEER_CACHE_DIR if set
+      // Chrome not found - try to install it at runtime
       console.log('   📥 Chrome not found in any location');
-      console.log('   ⏳ Attempting to use Puppeteer default behavior...');
-      console.log(`   💡 If this fails, Chrome needs to be installed during build`);
+      console.log('   ⏳ Attempting to install Chrome at runtime...');
+      console.log(`   📂 Cache directory: ${cacheDir}`);
+      console.log('   ⏱️  This may take 3-5 minutes on first request');
+      
+      // Don't set executablePath - let Puppeteer download Chrome
+      // This will use PUPPETEER_CACHE_DIR if set
+      try {
+        // Try to install Chrome using Puppeteer's browser installer
+        const { execSync } = require('child_process');
+        console.log('   🔄 Installing Chrome via Puppeteer...');
+        execSync('npx puppeteer browsers install chrome', {
+          env: {
+            ...process.env,
+            PUPPETEER_CACHE_DIR: cacheDir,
+            PUPPETEER_DOWNLOAD_PATH: cacheDir,
+            PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false'
+          },
+          stdio: 'inherit',
+          timeout: 600000 // 10 minutes timeout for runtime installation
+        });
+        console.log('   ✅ Chrome installation completed');
+        
+        // Try to find Chrome again after installation
+        try {
+          const result = execSync(
+            `find "${cacheDir}" -type f -name "chrome" -executable 2>/dev/null | head -1`,
+            { encoding: 'utf8', timeout: 5000 }
+          ).trim();
+          if (result && fs.existsSync(result)) {
+            executablePath = result;
+            launchOptions.executablePath = executablePath;
+            console.log(`   ✅ Found Chrome after installation: ${executablePath}`);
+          } else {
+            // Try Puppeteer's executablePath after installation
+            try {
+              const suggestedPath = puppeteer.executablePath();
+              if (suggestedPath && fs.existsSync(suggestedPath)) {
+                executablePath = suggestedPath;
+                launchOptions.executablePath = executablePath;
+                console.log(`   ✅ Found Chrome via Puppeteer: ${executablePath}`);
+              }
+            } catch (e) {
+              // Still not found, but let Puppeteer try to launch anyway
+            }
+          }
+        } catch (e) {
+          console.warn('   ⚠️  Could not verify Chrome installation');
+        }
+      } catch (installError: any) {
+        const installErrorMsg = installError?.message || String(installError);
+        console.warn(`   ⚠️  Chrome installation failed: ${installErrorMsg}`);
+        console.warn('   💡 Trying to launch browser anyway - Puppeteer may handle it');
+        // Continue to launch attempt - Puppeteer might still work
+      }
     }
 
     // Launch browser
@@ -164,13 +215,19 @@ async function getBrowser() {
       const errorMsg = error?.message || String(error);
       console.error('   ❌ Failed to launch browser:', errorMsg);
       
-      // Provide helpful error message
+      // Provide helpful error message with retry suggestion
       if (errorMsg.includes('Could not find Chrome') || errorMsg.includes('Browser was not found')) {
         throw new Error(
-          `Chrome not found. Please ensure Chrome is installed during build.\n` +
-          `Expected location: ${cacheDir}/chrome/*/chrome-*/chrome\n` +
-          `Build command should include: PUPPETEER_CACHE_DIR=${cacheDir} npx puppeteer browsers install chrome\n` +
-          `Current PUPPETEER_CACHE_DIR: ${process.env.PUPPETEER_CACHE_DIR || 'not set'}\n\n` +
+          `Chrome not found and installation failed.\n` +
+          `This can happen on Render free tier due to:\n` +
+          `1. Disk space limitations (Chrome needs ~200MB)\n` +
+          `2. Network timeouts during download\n` +
+          `3. Build timeout preventing Chrome installation\n\n` +
+          `Solutions:\n` +
+          `- Wait a few minutes and try again (first install takes time)\n` +
+          `- Check Render logs for disk space warnings\n` +
+          `- Verify PUPPETEER_CACHE_DIR is set: ${process.env.PUPPETEER_CACHE_DIR || 'not set'}\n` +
+          `- Consider upgrading to Render paid tier for faster builds\n\n` +
           `Error: ${errorMsg}`
         );
       }
