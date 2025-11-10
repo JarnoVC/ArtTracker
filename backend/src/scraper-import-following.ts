@@ -551,13 +551,30 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
     const apiResponses: any[] = [];
     const responseHandler = async (response: any) => {
       const url = response.url();
-      if (url.includes('/following') && (url.includes('.json') || url.includes('page=') || response.headers()['content-type']?.includes('application/json'))) {
-        try {
-          const json = await response.json();
-          apiResponses.push({ url, data: json });
-          console.log(`     ✓ Intercepted API response: ${url}`);
-        } catch (e) {
-          // Not JSON or couldn't parse
+      const contentType = response.headers()['content-type'] || '';
+      
+      // Check for following-related API calls - be more permissive
+      if (url.includes('artstation.com') && contentType.includes('application/json')) {
+        // Check if it's related to users/following
+        if (url.includes('/following') || 
+            url.includes('/users/') || 
+            url.includes('page=') || 
+            url.includes('following')) {
+          try {
+            const json = await response.json();
+            apiResponses.push({ url, data: json, status: response.status() });
+            console.log(`     ✓ Intercepted API response: ${url} (status: ${response.status()})`);
+            
+            // Also check if this JSON contains user data (even if URL doesn't match exactly)
+            if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+              const firstItem = json.data[0];
+              if (firstItem && (firstItem.username || firstItem.id)) {
+                console.log(`     ✓ Found user data in response: ${url}`);
+              }
+            }
+          } catch (e) {
+            // Not JSON or couldn't parse - that's okay
+          }
         }
       }
     };
@@ -576,11 +593,17 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
     
     // Check if page loaded correctly
     const pageInfo = await page.evaluate(() => {
+      // @ts-ignore - document and window are available in browser context
       return {
+        // @ts-ignore - document is available in browser context
         title: document.title,
+        // @ts-ignore - window is available in browser context
         url: window.location.href,
+        // @ts-ignore - document is available in browser context
         hasBody: !!document.body,
+        // @ts-ignore - document is available in browser context
         bodyTextLength: document.body ? document.body.textContent?.length : 0,
+        // @ts-ignore - window is available in browser context
         hasInitialState: typeof (window as any).__INITIAL_STATE__ !== 'undefined'
       };
     });
@@ -593,31 +616,65 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
     console.log(`     Extracting data from page...`);
     let artists: Array<{ username: string; name?: string; avatar?: string }> = [];
     
-    // Check if we got any API responses first (most reliable)
-    if (apiResponses.length > 0) {
-      console.log(`     Found ${apiResponses.length} API response(s), extracting data...`);
-      
-      for (const apiResponse of apiResponses) {
-        const apiData = apiResponse.data;
-        if (apiData && apiData.data && Array.isArray(apiData.data)) {
-          apiData.data.forEach((user: any) => {
-            if (user && user.username && !artists.find(a => a.username === user.username)) {
-              artists.push({
-                username: user.username,
-                name: user.full_name || user.username,
-                avatar: user.medium_avatar_url || user.small_picture_url || user.large_avatar_url
-              });
-            }
-          });
+      // Check if we got any API responses first (most reliable)
+      if (apiResponses.length > 0) {
+        console.log(`     Found ${apiResponses.length} API response(s), extracting data...`);
+        
+        for (const apiResponse of apiResponses) {
+          const apiData = apiResponse.data;
+          
+          // Try different data structures
+          if (apiData && apiData.data && Array.isArray(apiData.data)) {
+            apiData.data.forEach((user: any) => {
+              if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
+                artists.push({
+                  username: user.username,
+                  name: user.full_name || user.display_name || user.username,
+                  avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
+                });
+              }
+            });
+          }
+          
+          // Try items array
+          if (apiData && apiData.items && Array.isArray(apiData.items)) {
+            apiData.items.forEach((user: any) => {
+              if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
+                artists.push({
+                  username: user.username,
+                  name: user.full_name || user.display_name || user.username,
+                  avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
+                });
+              }
+            });
+          }
+          
+          // Try users array
+          if (apiData && apiData.users && Array.isArray(apiData.users)) {
+            apiData.users.forEach((user: any) => {
+              if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
+                artists.push({
+                  username: user.username,
+                  name: user.full_name || user.display_name || user.username,
+                  avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
+                });
+              }
+            });
+          }
+        }
+        
+        if (artists.length > 0) {
+          console.log(`     ✓ Extracted ${artists.length} artists from API responses`);
+          page.off('response', responseHandler);
+          return artists;
+        } else {
+          console.log(`     ⚠️  API responses found but no user data extracted - checking response structure...`);
+          // Log first response structure for debugging
+          if (apiResponses.length > 0) {
+            console.log(`     Sample response keys:`, Object.keys(apiResponses[0].data || {}).join(', '));
+          }
         }
       }
-      
-      if (artists.length > 0) {
-        console.log(`     ✓ Extracted ${artists.length} artists from API responses`);
-        page.off('response', responseHandler);
-        return artists;
-      }
-    }
 
     // Try to extract from initial state
     const extractedData = await page.evaluate(() => {
@@ -625,6 +682,7 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
       
       // Debug: Log what's available
       const debugInfo: any = {
+        // @ts-ignore - window is available in browser context
         hasWindow: typeof window !== 'undefined',
         hasInitialState: false,
         initialStateKeys: [],
@@ -695,7 +753,8 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
         // @ts-ignore - document is available in browser context
         const scripts = document.querySelectorAll('script');
         for (const script of Array.from(scripts)) {
-          const text = script.textContent || '';
+          // @ts-ignore - script is an Element with textContent in browser context
+          const text = (script as any).textContent || '';
           if (text.includes('__INITIAL_STATE__') || text.includes('following')) {
             try {
               // Try to extract JSON from script tag
@@ -774,75 +833,129 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
         }
       }
       
-      // If still no data, try extracting from DOM as last resort
+      // If still no data, try extracting from DOM - look for actual user profile links
       if (artists.length === 0) {
-        console.log(`     Trying DOM extraction as last resort...`);
-        const domArtists = await page.evaluate(() => {
+        console.log(`     Trying DOM extraction...`);
+        const domArtists = await page.evaluate((artstationUsername) => {
           const result: Array<{ username: string; name?: string; avatar?: string }> = [];
+          const seenUsernames = new Set<string>();
           
           try {
-            // Look for user profile links in the following page
-            // ArtStation following page typically has user cards
+            // ArtStation following page has links to user profiles
+            // Look for all links that match the pattern /username (simple user profile URL)
             // @ts-ignore - document is available in browser context
-            const userCards = document.querySelectorAll('[class*="user"], [class*="profile"], [class*="follower"]');
-            const seenUsernames = new Set<string>();
+            const allLinks = document.querySelectorAll('a[href]');
             
-            userCards.forEach((card: any) => {
-              const link = card.querySelector('a[href^="/"]');
-              if (link) {
-                const href = link.getAttribute('href');
-                if (href && href.match(/^\/[^\/]+\/?$/)) {
-                  const username = href.replace(/^\//, '').replace(/\/$/, '');
-                  // Skip common non-user paths and the current user
-                  if (username && 
-                      !username.includes('.') && 
-                      !['projects', 'following', 'followers', 'about', 'blog', 'shop', 'artwork'].includes(username) &&
-                      !seenUsernames.has(username)) {
-                    seenUsernames.add(username);
-                    const nameEl = card.querySelector('.user-name, [class*="name"], h3, h4, [class*="full-name"]');
-                    const avatarEl = card.querySelector('img, [class*="avatar"], [class*="picture"]');
-                    result.push({
-                      username: username,
-                      name: nameEl ? nameEl.textContent?.trim() : undefined,
-                      avatar: avatarEl ? (avatarEl.src || avatarEl.getAttribute('src')) : undefined
-                    });
+            allLinks.forEach((link: any) => {
+              const href = link.getAttribute('href');
+              if (!href) return;
+              
+              // Match user profile URLs: /username (not /username/projects, etc.)
+              // This is the pattern ArtStation uses for user profiles
+              const userProfileMatch = href.match(/^\/([^\/\?#\.]+)\/?$/);
+              if (userProfileMatch) {
+                const username = userProfileMatch[1];
+                
+                // Skip the current user and common non-user paths
+                if (username && 
+                    username !== artstationUsername &&
+                    username.length > 0 &&
+                    !username.match(/^\d+$/) && // Skip numeric-only IDs
+                    !['projects', 'following', 'followers', 'about', 'blog', 'shop', 'artwork', 
+                      'challenges', 'marketplace', 'jobs', 'learn', 'contests', 'help', 
+                      'api', 'search', 'login', 'signup', 'logout'].includes(username.toLowerCase()) &&
+                    !seenUsernames.has(username)) {
+                  
+                  seenUsernames.add(username);
+                  
+                  // Try to find name and avatar in the link's context
+                  let name: string | undefined;
+                  let avatar: string | undefined;
+                  
+                  // Look in parent elements for user info
+                  const parent = link.closest('div, article, section, li, span');
+                  if (parent) {
+                    // Try to find name
+                    const nameSelectors = [
+                      '.user-name', 
+                      '[class*="name"]', 
+                      'h3', 'h4', 'h5',
+                      '[class*="full-name"]',
+                      '[class*="display-name"]',
+                      '.username',
+                      'span'
+                    ];
+                    
+                    for (const selector of nameSelectors) {
+                      try {
+                        const nameEl = parent.querySelector(selector);
+                        if (nameEl && nameEl.textContent && nameEl.textContent.trim() && nameEl.textContent.trim().length < 100) {
+                          name = nameEl.textContent.trim();
+                          break;
+                        }
+                      } catch (e) {
+                        // Continue to next selector
+                      }
+                    }
+                    
+                    // Try to find avatar image
+                    const avatarSelectors = [
+                      'img[class*="avatar"]',
+                      'img[class*="picture"]',
+                      'img[class*="profile"]',
+                      'img[src*="avatar"]',
+                      'img[src*="cdn.artstation"]',
+                      'img'
+                    ];
+                    
+                    for (const selector of avatarSelectors) {
+                      try {
+                        const avatarEl = parent.querySelector(selector);
+                        if (avatarEl) {
+                          const src = avatarEl.src || avatarEl.getAttribute('src');
+                          if (src && (src.includes('avatar') || src.includes('artstation'))) {
+                            avatar = src;
+                            break;
+                          }
+                        }
+                      } catch (e) {
+                        // Continue to next selector
+                      }
+                    }
                   }
+                  
+                  result.push({
+                    username: username,
+                    name: name,
+                    avatar: avatar
+                  });
                 }
               }
             });
             
-            // Also try direct links if user cards didn't work
-            if (result.length === 0) {
-              // @ts-ignore - document is available in browser context
-              const links = document.querySelectorAll('a[href^="/"]');
-              links.forEach((link: any) => {
-                const href = link.getAttribute('href');
-                if (href && href.match(/^\/[^\/]+\/?$/)) {
-                  const username = href.replace(/^\//, '').replace(/\/$/, '');
-                  if (username && 
-                      !username.includes('.') && 
-                      !['projects', 'following', 'followers', 'about', 'blog', 'shop', 'artwork'].includes(username) &&
-                      !seenUsernames.has(username)) {
-                    seenUsernames.add(username);
-                    result.push({
-                      username: username,
-                      name: undefined,
-                      avatar: undefined
-                    });
-                  }
-                }
-              });
-            }
-          } catch (e) {
-            console.error('Error in DOM extraction:', e);
+            console.log(`DOM extraction found ${result.length} potential users`);
+          } catch (e: any) {
+            console.error('Error in DOM extraction:', e?.message || String(e));
           }
           
           return result;
-        });
+        }, artstationUsername);
         
         if (domArtists.length > 0) {
           console.log(`     Found ${domArtists.length} artists via DOM extraction`);
-          artists = domArtists;
+          // If we found a reasonable number of users (not too many which would indicate nav links)
+          if (domArtists.length > 0 && domArtists.length < 100) {
+            artists = domArtists;
+            console.log(`     ✓ Using ${artists.length} artists from DOM extraction`);
+          } else if (domArtists.length >= 100) {
+            console.log(`     ⚠️  Found ${domArtists.length} links - likely picking up navigation, filtering...`);
+            // Filter to only links with avatars or names (more likely to be actual users)
+            const filtered = domArtists.filter(a => a.avatar || a.name);
+            if (filtered.length > 0 && filtered.length < domArtists.length) {
+              artists = filtered;
+              console.log(`     ✓ Filtered to ${artists.length} likely users`);
+            }
+          }
         }
       }
     }
