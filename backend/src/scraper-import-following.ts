@@ -262,80 +262,97 @@ export async function importFollowingFromUser(userId: number, artstationUsername
     let currentPage = 1;
     let hasMorePages = true;
 
-    while (hasMorePages) {
-      console.log(`  → Fetching page ${currentPage}...`);
+    // Try HTML page first (more reliable than JSON endpoint)
+    console.log(`  → Fetching following list from HTML page...`);
+    try {
+      followedArtists = await fetchFollowingFromHTMLPage(browser, artstationUsername);
+      console.log(`  → Successfully fetched ${followedArtists.length} artists from HTML page`);
+    } catch (htmlError: any) {
+      console.warn(`  → HTML page fetch failed: ${htmlError.message}`);
+      console.log(`  → Trying JSON API endpoint as fallback...`);
       
-      const page = await browser.newPage();
-      await page.setViewport({ width: 1920, height: 1080 });
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      // Fallback to JSON API endpoint
+      while (hasMorePages) {
+        console.log(`  → Fetching page ${currentPage}...`);
+        
+        const page = await browser.newPage();
+        try {
+          await page.setViewport({ width: 1920, height: 1080 });
+          await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+          
+          // Set longer timeout and less strict wait condition
+          page.setDefaultNavigationTimeout(90000); // 90 seconds
+          page.setDefaultTimeout(90000);
 
-      const apiUrl = `https://www.artstation.com/users/${artstationUsername}/following.json?page=${currentPage}`;
-      
-      await page.goto(apiUrl, { 
-        waitUntil: 'networkidle2',
-        timeout: 30000
-      });
+          const apiUrl = `https://www.artstation.com/users/${artstationUsername}/following.json?page=${currentPage}`;
+          
+          console.log(`     Navigating to: ${apiUrl}`);
+          await page.goto(apiUrl, { 
+            waitUntil: 'domcontentloaded', // Less strict than networkidle2
+            timeout: 90000 // 90 seconds
+          });
 
-      // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 500));
+          // Wait for content to load
+          await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Extract the JSON data
-      const jsonData = await page.evaluate(() => {
-        // @ts-ignore - document is available in browser context
-        const preElement = document.querySelector('pre');
-        if (preElement) {
-          return JSON.parse(preElement.textContent || '{}');
-        }
-        // @ts-ignore - document is available in browser context
-        const bodyText = document.body.textContent;
-        if (bodyText) {
-          try {
-            return JSON.parse(bodyText);
-          } catch (e) {
+          // Extract the JSON data
+          const jsonData = await page.evaluate(() => {
+            // @ts-ignore - document is available in browser context
+            const preElement = document.querySelector('pre');
+            if (preElement) {
+              try {
+                return JSON.parse(preElement.textContent || '{}');
+              } catch (e) {
+                return null;
+              }
+            }
+            // @ts-ignore - document is available in browser context
+            const bodyText = document.body.textContent;
+            if (bodyText) {
+              try {
+                return JSON.parse(bodyText);
+              } catch (e) {
+                return null;
+              }
+            }
             return null;
-          }
-        }
-        return null;
-      });
+          });
 
-      await page.close();
-
-      // Check if we got valid data
-      if (jsonData && jsonData.data && Array.isArray(jsonData.data) && jsonData.data.length > 0) {
-        console.log(`     Found ${jsonData.data.length} artists on page ${currentPage}`);
-        
-        jsonData.data.forEach((user: any) => {
-          if (user.username) {
-            followedArtists.push({
-              username: user.username,
-              name: user.full_name || user.username,
-              avatar: user.medium_avatar_url || user.large_avatar_url
+          // Check if we got valid data
+          if (jsonData && jsonData.data && Array.isArray(jsonData.data) && jsonData.data.length > 0) {
+            console.log(`     Found ${jsonData.data.length} artists on page ${currentPage}`);
+            
+            jsonData.data.forEach((user: any) => {
+              if (user.username) {
+                followedArtists.push({
+                  username: user.username,
+                  name: user.full_name || user.username,
+                  avatar: user.medium_avatar_url || user.large_avatar_url
+                });
+              }
             });
-          }
-        });
 
-        // Check if there are more pages
-        // If we got less than 20 results, it's probably the last page
-        if (jsonData.data.length < 20) {
-          hasMorePages = false;
-        } else {
-          currentPage++;
-          // Add a delay between page requests to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      } else {
-        // No more data, we're done
-        hasMorePages = false;
-        
-        // If this is the first page and we got no data, try fallback
-        if (currentPage === 1) {
-          console.log(`  → API returned no data, trying HTML page fallback...`);
-          try {
-            followedArtists = await fetchFollowingFromHTMLPage(browser, artstationUsername);
-          } catch (fallbackError: any) {
-            console.error('Fallback also failed:', fallbackError.message);
-            throw new Error(`Failed to fetch following list. The profile might be private or the username might be incorrect. Error: ${fallbackError.message}`);
+            // Check if there are more pages
+            if (jsonData.data.length < 20) {
+              hasMorePages = false;
+            } else {
+              currentPage++;
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          } else {
+            hasMorePages = false;
+            if (currentPage === 1) {
+              console.warn(`     No data found in JSON response`);
+            }
           }
+        } catch (pageError: any) {
+          console.error(`     Error fetching page ${currentPage}:`, pageError.message);
+          hasMorePages = false;
+          if (currentPage === 1 && followedArtists.length === 0) {
+            throw new Error(`Failed to fetch following list: ${pageError.message}`);
+          }
+        } finally {
+          await page.close();
         }
       }
     }
@@ -509,47 +526,102 @@ export async function importFollowingFromUser(userId: number, artstationUsername
   }
 }
 
-// Fallback function to fetch from HTML page
+// Fetch from HTML page (more reliable than JSON endpoint)
 async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: string) {
   const page = await browser.newPage();
-  await page.setViewport({ width: 1920, height: 1080 });
-  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
   
-  const followingUrl = `https://www.artstation.com/users/${artstationUsername}/following`;
-  await page.goto(followingUrl, { 
-    waitUntil: 'networkidle2',
-    timeout: 30000
-  });
-
-  await new Promise(resolve => setTimeout(resolve, 3000));
-  await autoScroll(page);
-
-  const artists = await page.evaluate(() => {
-    const result: Array<{ username: string; name?: string; avatar?: string }> = [];
+  try {
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
-    try {
-      // @ts-ignore - window is available in browser context
-      const initialState = window.__INITIAL_STATE__;
-      if (initialState && initialState.following && initialState.following.data) {
-        initialState.following.data.forEach((user: any) => {
-          if (user.username) {
-            result.push({
-              username: user.username,
-              name: user.full_name || user.username,
-              avatar: user.medium_avatar_url || user.small_picture_url
+    // Set longer timeouts
+    page.setDefaultNavigationTimeout(120000); // 2 minutes
+    page.setDefaultTimeout(120000);
+    
+    const followingUrl = `https://www.artstation.com/users/${artstationUsername}/following`;
+    console.log(`     Navigating to: ${followingUrl}`);
+    
+    // Use 'load' instead of 'networkidle2' - less strict, works better with slow connections
+    await page.goto(followingUrl, { 
+      waitUntil: 'load', // Wait for page load, not network idle
+      timeout: 120000 // 2 minutes
+    });
+
+    console.log(`     Page loaded, waiting for content...`);
+    // Wait for JavaScript to execute and populate the page
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Try to extract from initial state first (fastest)
+    console.log(`     Extracting data from page...`);
+    let artists = await page.evaluate(() => {
+      const result: Array<{ username: string; name?: string; avatar?: string }> = [];
+      
+      try {
+        // @ts-ignore - window is available in browser context
+        const initialState = window.__INITIAL_STATE__;
+        if (initialState && initialState.following && initialState.following.data) {
+          initialState.following.data.forEach((user: any) => {
+            if (user && user.username) {
+              result.push({
+                username: user.username,
+                name: user.full_name || user.username,
+                avatar: user.medium_avatar_url || user.small_picture_url || user.large_avatar_url
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Error extracting from initial state:', e);
+      }
+
+      // Note: DOM extraction fallback removed - rely on initial state only
+      // ArtStation's following page structure makes DOM extraction unreliable
+
+      return result;
+    });
+
+    // If we didn't get data from initial state, try scrolling to load more
+    if (artists.length === 0) {
+      console.log(`     No data from initial state, trying to scroll and load more...`);
+      await autoScroll(page);
+      
+      // Wait a bit more after scrolling
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Try extracting again
+      artists = await page.evaluate(() => {
+        const result: Array<{ username: string; name?: string; avatar?: string }> = [];
+        
+        try {
+          // @ts-ignore - window is available in browser context
+          const initialState = window.__INITIAL_STATE__;
+          if (initialState && initialState.following && initialState.following.data) {
+            initialState.following.data.forEach((user: any) => {
+              if (user && user.username) {
+                result.push({
+                  username: user.username,
+                  name: user.full_name || user.username,
+                  avatar: user.medium_avatar_url || user.small_picture_url || user.large_avatar_url
+                });
+              }
             });
           }
-        });
-      }
-    } catch (e) {
-      console.error('Error extracting from initial state:', e);
+        } catch (e) {
+          console.error('Error extracting after scroll:', e);
+        }
+
+        return result;
+      });
     }
 
-    return result;
-  });
-
-  await page.close();
-  return artists;
+    console.log(`     Extracted ${artists.length} artists from page`);
+    return artists;
+  } catch (error: any) {
+    console.error(`     Error in fetchFollowingFromHTMLPage:`, error.message);
+    throw error;
+  } finally {
+    await page.close();
+  }
 }
 
 async function autoScroll(page: any) {

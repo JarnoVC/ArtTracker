@@ -272,18 +272,24 @@ export async function scrapeArtist(artistId: number, userId: number) {
       console.log(`  → Fetching page ${currentPage}...`);
       
       const page = await browser.newPage();
-      await page.setViewport({ width: 1920, height: 1080 });
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      try {
+        await page.setViewport({ width: 1920, height: 1080 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-      const apiUrl = `https://www.artstation.com/users/${artist.username}/projects.json?page=${currentPage}`;
-      
-      await page.goto(apiUrl, { 
-        waitUntil: 'networkidle2',
-        timeout: 30000
-      });
+        // Set longer timeouts
+        page.setDefaultNavigationTimeout(90000); // 90 seconds
+        page.setDefaultTimeout(90000);
 
-      // Wait a bit
-      await delay(500);
+        const apiUrl = `https://www.artstation.com/users/${artist.username}/projects.json?page=${currentPage}`;
+        
+        console.log(`     Navigating to: ${apiUrl}`);
+        await page.goto(apiUrl, { 
+          waitUntil: 'domcontentloaded', // Less strict than networkidle2
+          timeout: 90000 // 90 seconds
+        });
+
+        // Wait for content to load
+        await delay(2000);
 
       // Extract the JSON data
       const jsonData = await page.evaluate(() => {
@@ -304,53 +310,63 @@ export async function scrapeArtist(artistId: number, userId: number) {
         return null;
       });
 
-      await page.close();
+        // Check if we got valid data
+        if (jsonData && jsonData.data && Array.isArray(jsonData.data) && jsonData.data.length > 0) {
+          console.log(`     Found ${jsonData.data.length} artworks on page ${currentPage}`);
+          
+          // Extract artworks from this page
+          jsonData.data.forEach((project: any) => {
+            if (!project.hash_id) return;
 
-      // Check if we got valid data
-      if (jsonData && jsonData.data && Array.isArray(jsonData.data) && jsonData.data.length > 0) {
-        console.log(`     Found ${jsonData.data.length} artworks on page ${currentPage}`);
-        
-        // Extract artworks from this page
-        jsonData.data.forEach((project: any) => {
-          if (!project.hash_id) return;
+            const artwork: ScrapedArtwork = {
+              artwork_id: project.hash_id,
+              title: project.title || 'Untitled',
+              thumbnail_url: project.cover?.thumb_url || 
+                            project.cover?.small_square_url || 
+                            project.cover?.url || 
+                            project.smaller_square_cover_url || '',
+              artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
+              upload_date: project.published_at || project.created_at
+            };
 
-          const artwork: ScrapedArtwork = {
-            artwork_id: project.hash_id,
-            title: project.title || 'Untitled',
-            thumbnail_url: project.cover?.thumb_url || 
-                          project.cover?.small_square_url || 
-                          project.cover?.url || 
-                          project.smaller_square_cover_url || '',
-            artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
-            upload_date: project.published_at || project.created_at
-          };
+            artworks.push(artwork);
+          });
 
-          artworks.push(artwork);
-        });
+          // Save user info from first page
+          if (currentPage === 1 && jsonData.data[0]?.user) {
+            userInfo = jsonData.data[0].user;
+          }
 
-        // Save user info from first page
-        if (currentPage === 1 && jsonData.data[0]?.user) {
-          userInfo = jsonData.data[0].user;
-        }
-
-        // Check if there are more pages
-        // ArtStation typically returns 50 items per page
-        if (jsonData.data.length < 50) {
-          hasMorePages = false;
+          // Check if there are more pages
+          // ArtStation typically returns 50 items per page
+          if (jsonData.data.length < 50) {
+            hasMorePages = false;
+          } else {
+            currentPage++;
+            // Add a delay between page requests
+            await delay(1000);
+          }
         } else {
-          currentPage++;
-          // Add a delay between page requests
-          await delay(500);
+          // No more data
+          hasMorePages = false;
+          
+          // If this is the first page and we got no data, try fallback
+          if (currentPage === 1) {
+            console.log('  ⚠ No valid JSON data found, trying profile page...');
+            await page.close();
+            return await scrapeFromProfilePage(artistId, userId, artist);
+          }
         }
-      } else {
-        // No more data
+      } catch (pageError: any) {
+        console.error(`     Error fetching page ${currentPage}:`, pageError.message);
         hasMorePages = false;
-        
-        // If this is the first page and we got no data, try fallback
-        if (currentPage === 1) {
-          console.log('  ⚠ No valid JSON data found, trying profile page...');
+        if (currentPage === 1 && artworks.length === 0) {
+          await page.close();
+          console.log('  ⚠ API failed, trying profile page fallback...');
           return await scrapeFromProfilePage(artistId, userId, artist);
         }
+      } finally {
+        await page.close();
       }
     }
 
@@ -405,88 +421,99 @@ async function scrapeFromProfilePage(artistId: number, userId: number, artist: a
   const browser = await getBrowser();
   const page = await browser.newPage();
 
-  await page.setViewport({ width: 1920, height: 1080 });
-  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+  try {
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-  console.log(`  → Trying profile page: ${artist.profile_url}`);
-  await page.goto(artist.profile_url, { 
-    waitUntil: 'networkidle2',
-    timeout: 30000
-  });
+    // Set longer timeouts
+    page.setDefaultNavigationTimeout(120000); // 2 minutes
+    page.setDefaultTimeout(120000);
+    
+    console.log(`  → Trying profile page: ${artist.profile_url}`);
+    await page.goto(artist.profile_url, { 
+      waitUntil: 'load', // Less strict than networkidle2
+      timeout: 120000 // 2 minutes
+    });
 
-  await delay(2000);
+    console.log(`     Page loaded, waiting for content...`);
+    await delay(5000); // Wait for JavaScript to execute
 
-  const data = await page.evaluate(() => {
-    const result: any = {
-      artworks: [],
-      displayName: null,
-      avatarUrl: null
-    };
+    const data = await page.evaluate(() => {
+      const result: any = {
+        artworks: [],
+        displayName: null,
+        avatarUrl: null
+      };
 
-    try {
-      // @ts-ignore - window is available in browser context
-      const initialState = window.__INITIAL_STATE__;
-      
-      if (initialState) {
-        if (initialState.user) {
-          result.displayName = initialState.user.full_name || initialState.user.username;
-          result.avatarUrl = initialState.user.medium_avatar_url || initialState.user.small_picture_url;
-        }
+      try {
+        // @ts-ignore - window is available in browser context
+        const initialState = window.__INITIAL_STATE__;
         
-        if (initialState.projects && initialState.projects.data) {
-          initialState.projects.data.forEach((project: any) => {
-            result.artworks.push({
-              artwork_id: project.hash_id || project.id?.toString() || '',
-              title: project.title || 'Untitled',
-              thumbnail_url: project.cover?.thumb_url || project.cover?.small_square_url || project.cover?.url || '',
-              artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
-              upload_date: project.published_at || project.created_at
+        if (initialState) {
+          if (initialState.user) {
+            result.displayName = initialState.user.full_name || initialState.user.username;
+            result.avatarUrl = initialState.user.medium_avatar_url || initialState.user.small_picture_url;
+          }
+          
+          if (initialState.projects && initialState.projects.data) {
+            initialState.projects.data.forEach((project: any) => {
+              result.artworks.push({
+                artwork_id: project.hash_id || project.id?.toString() || '',
+                title: project.title || 'Untitled',
+                thumbnail_url: project.cover?.thumb_url || project.cover?.small_square_url || project.cover?.url || '',
+                artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
+                upload_date: project.published_at || project.created_at
+              });
             });
-          });
+          }
         }
+      } catch (e) {
+        console.error('Error extracting from initial state:', e);
       }
-    } catch (e) {
-      console.error('Error extracting from initial state:', e);
+
+      return result;
+    });
+
+    // Update artist info
+    if (data.displayName && !artist.display_name) {
+      await db.updateArtist(artistId, userId, { display_name: data.displayName });
+    }
+    if (data.avatarUrl && !artist.avatar_url) {
+      await db.updateArtist(artistId, userId, { avatar_url: data.avatarUrl });
     }
 
-    return result;
-  });
+    console.log(`  → Found ${data.artworks.length} artworks from profile`);
 
-  await page.close();
-
-  // Update artist info
-  if (data.displayName && !artist.display_name) {
-    await db.updateArtist(artistId, userId, { display_name: data.displayName });
-  }
-  if (data.avatarUrl && !artist.avatar_url) {
-    await db.updateArtist(artistId, userId, { avatar_url: data.avatarUrl });
-  }
-
-  console.log(`  → Found ${data.artworks.length} artworks from profile`);
-
-  let newCount = 0;
-  for (const artwork of data.artworks) {
-    const result = await db.addArtwork(
-      userId,
-      artistId,
-      artwork.artwork_id,
-      artwork.title,
-      artwork.thumbnail_url,
-      artwork.artwork_url,
-      artwork.upload_date
-    );
-    if (result.isNew) {
-      newCount++;
+    let newCount = 0;
+    for (const artwork of data.artworks) {
+      const result = await db.addArtwork(
+        userId,
+        artistId,
+        artwork.artwork_id,
+        artwork.title,
+        artwork.thumbnail_url,
+        artwork.artwork_url,
+        artwork.upload_date
+      );
+      if (result.isNew) {
+        newCount++;
+      }
     }
+
+    await db.updateArtist(artistId, userId, { last_checked: new Date().toISOString() });
+
+    await page.close();
+
+    return {
+      artist: artist.username,
+      total_found: data.artworks.length,
+      new_artworks: newCount
+    };
+  } catch (error: any) {
+    console.error(`     Error in scrapeFromProfilePage:`, error.message);
+    await page.close();
+    throw error;
   }
-
-  await db.updateArtist(artistId, userId, { last_checked: new Date().toISOString() });
-
-  return {
-    artist: artist.username,
-    total_found: data.artworks.length,
-    new_artworks: newCount
-  };
 }
 
 // Quick check if artist has new artworks (optimized for "Check for Updates")
