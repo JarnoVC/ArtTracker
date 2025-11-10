@@ -11,21 +11,15 @@ async function getBrowser() {
     const fs = require('fs');
     const path = require('path');
     const launchOptions: any = {
-      headless: true,
+      headless: true, // Headless mode (use true for compatibility)
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-        '--disable-background-networking',
-        '--disable-background-timer-throttling',
-        '--disable-renderer-backgrounding',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-ipc-flooding-protection',
-        '--single-process'
+        '--disable-blink-features=AutomationControlled', // Remove automation flags (helps bypass Cloudflare)
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--window-size=1920,1080',
+        '--start-maximized'
       ]
     };
 
@@ -540,41 +534,67 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
   const page = await browser.newPage();
   
   try {
+    // Make browser look more realistic to avoid Cloudflare detection
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
-    // Set longer timeouts
-    page.setDefaultNavigationTimeout(120000); // 2 minutes
-    page.setDefaultTimeout(120000);
+    // Remove webdriver property (Cloudflare detects this)
+    await page.evaluateOnNewDocument(() => {
+      // @ts-ignore - navigator is available in browser context
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+    });
     
-    // Set up response interception BEFORE navigating (to catch API calls)
+    // Add realistic browser headers
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Cache-Control': 'max-age=0'
+    });
+    
+    // Set longer timeouts for Cloudflare
+    page.setDefaultNavigationTimeout(180000); // 3 minutes
+    page.setDefaultTimeout(180000);
+    
+    // Set up response interception BEFORE navigating (to catch ALL API calls)
     const apiResponses: any[] = [];
     const responseHandler = async (response: any) => {
       const url = response.url();
       const contentType = response.headers()['content-type'] || '';
       
-      // Check for following-related API calls - be more permissive
+      // Intercept ALL JSON responses from ArtStation (Cloudflare might block specific patterns)
       if (url.includes('artstation.com') && contentType.includes('application/json')) {
-        // Check if it's related to users/following
-        if (url.includes('/following') || 
-            url.includes('/users/') || 
-            url.includes('page=') || 
-            url.includes('following')) {
-          try {
-            const json = await response.json();
+        try {
+          const json = await response.json();
+          
+          // Check if this JSON contains user/following data
+          const hasUserData = json.data && Array.isArray(json.data) && json.data.length > 0 && 
+                             json.data[0] && (json.data[0].username || json.data[0].id);
+          
+          // Also check for following-related URLs
+          const isFollowingUrl = url.includes('/following') || 
+                                url.includes('/users/') && url.includes(artstationUsername) ||
+                                url.includes('page=');
+          
+          if (hasUserData || isFollowingUrl) {
             apiResponses.push({ url, data: json, status: response.status() });
             console.log(`     ✓ Intercepted API response: ${url} (status: ${response.status()})`);
             
-            // Also check if this JSON contains user data (even if URL doesn't match exactly)
-            if (json.data && Array.isArray(json.data) && json.data.length > 0) {
-              const firstItem = json.data[0];
-              if (firstItem && (firstItem.username || firstItem.id)) {
-                console.log(`     ✓ Found user data in response: ${url}`);
-              }
+            if (hasUserData) {
+              console.log(`     ✓ Found ${json.data.length} users in response`);
             }
-          } catch (e) {
-            // Not JSON or couldn't parse - that's okay
           }
+        } catch (e) {
+          // Not JSON or couldn't parse - that's okay
         }
       }
     };
@@ -583,13 +603,73 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
     const followingUrl = `https://www.artstation.com/users/${artstationUsername}/following`;
     console.log(`     Navigating to: ${followingUrl}`);
     
-    // Use 'load' instead of 'networkidle2' - less strict, works better with slow connections
+    // Navigate to page
     await page.goto(followingUrl, { 
-      waitUntil: 'load', // Wait for page load, not network idle
-      timeout: 120000 // 2 minutes
+      waitUntil: 'domcontentloaded', // Don't wait for all resources
+      timeout: 180000 // 3 minutes
     });
 
-    console.log(`     Page loaded, waiting for content...`);
+    console.log(`     Page loaded, checking for Cloudflare...`);
+    
+    // Check if we hit Cloudflare challenge and wait for it to complete
+    let isCloudflare = false;
+    let waitTime = 0;
+    const maxWaitTime = 90000; // Wait up to 90 seconds for Cloudflare
+    const checkInterval = 3000; // Check every 3 seconds
+    
+    while (waitTime < maxWaitTime) {
+      const pageInfo = await page.evaluate(() => {
+        // @ts-ignore - document and window are available in browser context
+        return {
+          // @ts-ignore - document is available in browser context
+          title: document.title,
+          // @ts-ignore - window is available in browser context
+          url: window.location.href,
+          // @ts-ignore - document is available in browser context
+          bodyText: document.body ? document.body.textContent?.substring(0, 500) : ''
+        };
+      });
+      
+      // Check if we're on Cloudflare challenge page
+      if (pageInfo.title.includes('Just a moment') || 
+          pageInfo.title.includes('Please wait') ||
+          pageInfo.bodyText.includes('Please complete a security check') ||
+          pageInfo.bodyText.includes('Checking your browser') ||
+          pageInfo.bodyText.includes('DDoS protection by Cloudflare')) {
+        if (!isCloudflare) {
+          isCloudflare = true;
+          console.log(`     ⏳ Cloudflare challenge detected, waiting for it to complete...`);
+        }
+        console.log(`     ⏳ Still waiting... (${Math.round(waitTime/1000)}s/${Math.round(maxWaitTime/1000)}s)`);
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        waitTime += checkInterval;
+        
+        // Try to wait for navigation (Cloudflare might redirect)
+        try {
+          await Promise.race([
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: checkInterval }),
+            new Promise(resolve => setTimeout(resolve, checkInterval))
+          ]);
+        } catch (e) {
+          // Navigation might not happen, that's okay
+        }
+      } else {
+        // We're past Cloudflare
+        if (isCloudflare) {
+          console.log(`     ✓ Cloudflare challenge completed after ${Math.round(waitTime/1000)}s!`);
+        }
+        break;
+      }
+    }
+    
+    if (isCloudflare && waitTime >= maxWaitTime) {
+      console.log(`     ⚠️  Cloudflare challenge timed out after ${maxWaitTime/1000}s`);
+      console.log(`     💡 The page might be permanently blocked or require manual verification`);
+    }
+    
+    // Wait for JavaScript to execute and API calls to complete after Cloudflare
+    console.log(`     Waiting for page content to load...`);
+    await new Promise(resolve => setTimeout(resolve, 15000)); // Wait 15 seconds for content
     
     // Check if page loaded correctly
     const pageInfo = await page.evaluate(() => {
@@ -608,73 +688,95 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
       };
     });
     console.log(`     Page info:`, JSON.stringify(pageInfo, null, 2));
-    
-    // Wait for JavaScript to execute and populate the page, and for API calls to complete
-    await new Promise(resolve => setTimeout(resolve, 8000));
+    console.log(`     Total API responses intercepted: ${apiResponses.length}`);
     
     // Try to extract from initial state and API responses
     console.log(`     Extracting data from page...`);
     let artists: Array<{ username: string; name?: string; avatar?: string }> = [];
     
-      // Check if we got any API responses first (most reliable)
-      if (apiResponses.length > 0) {
-        console.log(`     Found ${apiResponses.length} API response(s), extracting data...`);
+    // Check if we got any API responses first (most reliable)
+    if (apiResponses.length > 0) {
+      console.log(`     Found ${apiResponses.length} API response(s), extracting data...`);
+      
+      for (const apiResponse of apiResponses) {
+        const apiData = apiResponse.data;
         
-        for (const apiResponse of apiResponses) {
-          const apiData = apiResponse.data;
-          
-          // Try different data structures
-          if (apiData && apiData.data && Array.isArray(apiData.data)) {
-            apiData.data.forEach((user: any) => {
-              if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
-                artists.push({
-                  username: user.username,
-                  name: user.full_name || user.display_name || user.username,
-                  avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
-                });
-              }
-            });
-          }
-          
-          // Try items array
-          if (apiData && apiData.items && Array.isArray(apiData.items)) {
-            apiData.items.forEach((user: any) => {
-              if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
-                artists.push({
-                  username: user.username,
-                  name: user.full_name || user.display_name || user.username,
-                  avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
-                });
-              }
-            });
-          }
-          
-          // Try users array
-          if (apiData && apiData.users && Array.isArray(apiData.users)) {
-            apiData.users.forEach((user: any) => {
-              if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
-                artists.push({
-                  username: user.username,
-                  name: user.full_name || user.display_name || user.username,
-                  avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
-                });
-              }
-            });
-          }
+        // Try different data structures - based on your JSON: { data: [...], total_count: ... }
+        if (apiData && apiData.data && Array.isArray(apiData.data)) {
+          apiData.data.forEach((user: any) => {
+            if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
+              artists.push({
+                username: user.username,
+                name: user.full_name || user.display_name || user.username,
+                avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
+              });
+            }
+          });
+          console.log(`     ✓ Extracted ${apiData.data.length} users from API response data array`);
         }
         
-        if (artists.length > 0) {
-          console.log(`     ✓ Extracted ${artists.length} artists from API responses`);
-          page.off('response', responseHandler);
-          return artists;
-        } else {
-          console.log(`     ⚠️  API responses found but no user data extracted - checking response structure...`);
-          // Log first response structure for debugging
-          if (apiResponses.length > 0) {
-            console.log(`     Sample response keys:`, Object.keys(apiResponses[0].data || {}).join(', '));
+        // Try items array
+        if (apiData && apiData.items && Array.isArray(apiData.items)) {
+          apiData.items.forEach((user: any) => {
+            if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
+              artists.push({
+                username: user.username,
+                name: user.full_name || user.display_name || user.username,
+                avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
+              });
+            }
+          });
+        }
+        
+        // Try users array
+        if (apiData && apiData.users && Array.isArray(apiData.users)) {
+          apiData.users.forEach((user: any) => {
+            if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
+              artists.push({
+                username: user.username,
+                name: user.full_name || user.display_name || user.username,
+                avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
+              });
+            }
+          });
+        }
+        
+        // If apiData itself is an array (unlikely but possible)
+        if (Array.isArray(apiData)) {
+          apiData.forEach((user: any) => {
+            if (user && user.username && !artists.find((a: any) => a.username === user.username)) {
+              artists.push({
+                username: user.username,
+                name: user.full_name || user.display_name || user.username,
+                avatar: user.medium_avatar_url || user.small_avatar_url || user.large_avatar_url || user.avatar_url
+              });
+            }
+          });
+        }
+      }
+      
+      if (artists.length > 0) {
+        console.log(`     ✓ Successfully extracted ${artists.length} artists from API responses`);
+        page.off('response', responseHandler);
+        return artists;
+      } else {
+        console.log(`     ⚠️  API responses found but no user data extracted`);
+        // Log response structure for debugging
+        if (apiResponses.length > 0) {
+          console.log(`     Sample response URL: ${apiResponses[0].url}`);
+          console.log(`     Sample response keys:`, Object.keys(apiResponses[0].data || {}).join(', '));
+          if (apiResponses[0].data) {
+            console.log(`     Sample response data type:`, Array.isArray(apiResponses[0].data) ? 'array' : typeof apiResponses[0].data);
+            if (typeof apiResponses[0].data === 'object' && !Array.isArray(apiResponses[0].data)) {
+              const sampleKeys = Object.keys(apiResponses[0].data).slice(0, 10);
+              console.log(`     Sample response data keys:`, sampleKeys.join(', '));
+            }
           }
         }
       }
+    } else {
+      console.log(`     ⚠️  No API responses intercepted - Cloudflare might be blocking requests`);
+    }
 
     // Try to extract from initial state
     const extractedData = await page.evaluate(() => {
