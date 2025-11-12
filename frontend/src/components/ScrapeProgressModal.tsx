@@ -6,7 +6,6 @@ import './ScrapeProgressModal.css';
 
 // Use the same API_BASE as api.ts
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
-const MAX_CONCURRENT_REQUESTS = Math.max(1, parseInt(import.meta.env.VITE_SCRAPE_CONCURRENCY || '3'));
 
 // Create axios instance with base URL and default auth header
 const apiClient = axios.create({
@@ -55,88 +54,89 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
   }, []);
 
   const scrapeArtists = async () => {
-    const total = artists.length;
-    let nextIndex = 0;
+    // Sequential processing for stability
+    for (let i = 0; i < artists.length; i++) {
+      const artist = artists[i];
+      
+      // Update status to checking and current index
+      setCurrentIndex(i);
+      setProgress(prev => {
+        const updated = [...prev];
+        updated[i] = { ...updated[i], status: 'checking' };
+        return updated;
+      });
 
-    const runWorker = async () => {
-      while (true) {
-        const i = nextIndex++;
-        if (i >= total) {
-          return;
-        }
+      // Give React time to render the update
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-        const artist = artists[i];
-
-        setCurrentIndex(i);
+      try {
+        // Use optimized scraping endpoint (checks first, only scrapes if updates exist)
+        console.log(`[${i + 1}/${artists.length}] Scraping artist ${artist.id} (${artist.username})...`);
+        
+        // Update to scraping status
         setProgress(prev => {
           const updated = [...prev];
-          updated[i] = { ...updated[i], status: 'checking' };
+          updated[i] = { ...updated[i], status: 'scraping' };
           return updated;
         });
-
-        // Allow React to paint before heavy work
-        await new Promise(resolve => setTimeout(resolve, 20));
-
-        try {
-          console.log(`[${i + 1}/${total}] Scraping artist ${artist.id} (${artist.username})...`);
-
-          setProgress(prev => {
-            const updated = [...prev];
-            updated[i] = { ...updated[i], status: 'scraping' };
-            return updated;
-          });
-
-          const response = await apiClient.post(`/scrape/artist/${artist.id}?optimized=true`, {});
-          const result = response.data;
-
-          if (result.status === 'skipped') {
-            setProgress(prev => {
-              const updated = [...prev];
-              updated[i] = { 
-                ...updated[i], 
-                status: 'skipped',
-                reason: result.reason || 'no_updates',
-                newArtworks: 0
-              };
-              return updated;
-            });
-            console.log(`  ✓ ${artist.username}: Skipped (no updates)`);
-          } else {
-            const newArtworks = result.new_artworks || 0;
-            const totalFound = result.total_found || 0;
-            setProgress(prev => {
-              const updated = [...prev];
-              updated[i] = { 
-                ...updated[i], 
-                status: 'completed',
-                newArtworks
-              };
-              return updated;
-            });
-            console.log(`  ✓ ${artist.username}: Completed (${newArtworks} new, ${totalFound} total)`);
-          }
-        } catch (error: any) {
-          console.error(`  ✗ Error scraping artist ${artist.id} (${artist.username}):`, error);
-          const errorMessage = error.response?.data?.error || error.message || 'Failed to scrape';
+        
+        // Small delay to show scraping state
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        const response = await apiClient.post(`/scrape/artist/${artist.id}?optimized=true`, {});
+        
+        const result = response.data;
+        
+        // Handle skipped status (no updates)
+        if (result.status === 'skipped') {
           setProgress(prev => {
             const updated = [...prev];
             updated[i] = { 
               ...updated[i], 
-              status: 'failed',
-              error: errorMessage
+              status: 'skipped',
+              reason: result.reason || 'no_updates',
+              newArtworks: 0
             };
             return updated;
           });
-        } finally {
-          // Gentle pacing between batches
-          await new Promise(resolve => setTimeout(resolve, 40));
+          console.log(`  ✓ ${artist.username}: Skipped (no updates)`);
+        } else {
+          // Has updates, was scraped
+          const newArtworks = result.new_artworks || 0;
+          const totalFound = result.total_found || 0;
+          setProgress(prev => {
+            const updated = [...prev];
+            updated[i] = { 
+              ...updated[i], 
+              status: 'completed',
+              newArtworks: newArtworks
+            };
+            return updated;
+          });
+          console.log(`  ✓ ${artist.username}: Completed (${newArtworks} new, ${totalFound} total)`);
         }
+      } catch (error: any) {
+        console.error(`  ✗ Error scraping artist ${artist.id} (${artist.username}):`, error);
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to scrape';
+        setProgress(prev => {
+          const updated = [...prev];
+          updated[i] = { 
+            ...updated[i], 
+            status: 'failed',
+            error: errorMessage
+          };
+          return updated;
+        });
       }
-    };
 
-    const workerCount = Math.min(MAX_CONCURRENT_REQUESTS, total);
-    await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+      // Small delay between artists to avoid overwhelming the backend
+      // Also allows UI to update smoothly and shows progress
+      if (i < artists.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
 
+    // Clear current index when done
     setCurrentIndex(-1);
     setIsComplete(true);
     console.log(`✅ All artists processed!`);

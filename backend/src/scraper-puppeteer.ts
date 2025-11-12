@@ -2,7 +2,7 @@ import puppeteer from 'puppeteer';
 import * as db from './database';
 
 const SCRAPE_DELAY = parseInt(process.env.SCRAPE_DELAY_MS || '2000');
-const CONCURRENT_ARTIST_LIMIT = Math.max(1, parseInt(process.env.SCRAPE_CONCURRENCY || '2'));
+const CONCURRENT_ARTIST_LIMIT = 1; // Sequential processing for Render free tier stability
 const QUICK_CHECK_DELAY = Math.max(200, Math.floor(SCRAPE_DELAY / 5));
 const PAGE_NAVIGATION_DELAY = Math.max(300, Math.floor(SCRAPE_DELAY / 3));
 const CLOUDFLARE_SETTLE_DELAY = Math.max(1500, Math.floor(SCRAPE_DELAY * 0.75));
@@ -1060,48 +1060,45 @@ export async function scrapeAllArtists(userId: number) {
 
   const results: any[] = [];
 
-  const processArtist = async (artist: any) => {
+  for (const artist of artists) {
     const start = Date.now();
     try {
+      // Quick check: does this artist have new artworks?
       const checkResult = await checkArtistForUpdates(artist.id, userId);
-
+      
       if (!checkResult.hasUpdates) {
         console.log(`  ⏭ Skipping @${artist.username} - no updates`);
-        return {
+        results.push({
           artist: artist.username,
           status: 'skipped',
           reason: 'no_updates',
           duration_ms: Date.now() - start
-        };
+        });
+        // Small delay even for skipped artists
+        await delay(QUICK_CHECK_DELAY);
+        continue;
       }
 
+      // Has updates - scrape only new artworks
       console.log(`  🔍 @${artist.username} has updates, scraping...`);
       const scrapeResult = await scrapeArtistUpdates(artist.id, userId);
-      return {
+      results.push({
         ...scrapeResult,
         status: 'completed',
         duration_ms: Date.now() - start
-      };
+      });
+
+      // Small delay between artists
+      await delay(PAGE_NAVIGATION_DELAY);
     } catch (error: any) {
       console.error(`  ✗ Error checking @${artist.username}:`, error.message);
-      return {
+      results.push({
         artist: artist.username,
         status: 'failed',
         error: error.message,
         duration_ms: Date.now() - start
-      };
-    } finally {
-      // Gentle pacing between batches
-      await delay(QUICK_CHECK_DELAY);
+      });
     }
-  };
-
-  let index = 0;
-  while (index < artists.length) {
-    const batch = artists.slice(index, index + CONCURRENT_ARTIST_LIMIT);
-    const batchResults = await Promise.all(batch.map(processArtist));
-    results.push(...batchResults);
-    index += CONCURRENT_ARTIST_LIMIT;
   }
 
   const completed = results.filter(r => r.status === 'completed').length;
