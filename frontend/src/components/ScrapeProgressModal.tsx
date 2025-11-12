@@ -27,6 +27,7 @@ apiClient.interceptors.request.use((config) => {
 interface ScrapeProgressModalProps {
   artists: Artist[];
   onComplete: () => void;
+  isInitialImport?: boolean; // If true, use full scrape (for newly imported artists). If false/undefined, use optimized (for updates)
 }
 
 interface ArtistProgress {
@@ -38,7 +39,7 @@ interface ArtistProgress {
   reason?: string;
 }
 
-function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) {
+function ScrapeProgressModal({ artists, onComplete, isInitialImport = false }: ScrapeProgressModalProps) {
   const [progress, setProgress] = useState<ArtistProgress[]>(
     artists.map(a => ({
       id: a.id,
@@ -83,7 +84,12 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
         // Small delay to show scraping state
         await new Promise(resolve => setTimeout(resolve, 150));
         
-        const response = await apiClient.post(`/scrape/artist/${artist.id}?optimized=true`, {});
+        // Use full scrape for initial imports (newly imported artists), optimized for updates
+        const endpoint = isInitialImport 
+          ? `/scrape/artist/${artist.id}`  // Full scrape (no optimized param)
+          : `/scrape/artist/${artist.id}?optimized=true`;  // Optimized check
+        
+        const response = await apiClient.post(endpoint, {});
         
         const result = response.data;
         

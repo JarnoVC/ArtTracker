@@ -23,6 +23,7 @@ function App() {
   const [isScraping, setIsScraping] = useState(false);
   const [showScrapeProgress, setShowScrapeProgress] = useState(false);
   const [scrapeProgressArtists, setScrapeProgressArtists] = useState<Artist[]>([]);
+  const [isScrapeProgressInitialImport, setIsScrapeProgressInitialImport] = useState(false);
   const [showSyncProgress, setShowSyncProgress] = useState(false);
   const [isSyncComplete, setIsSyncComplete] = useState(false);
   const [newCount, setNewCount] = useState(0);
@@ -164,17 +165,20 @@ function App() {
     
     setIsScraping(true);
     setScrapeProgressArtists(artists);
+    setIsScrapeProgressInitialImport(false); // "Check for Updates" uses optimized scraping
     setShowScrapeProgress(true);
   };
 
   const handleShowImportProgress = (artistsToScrape: Artist[]) => {
     setScrapeProgressArtists(artistsToScrape);
+    setIsScrapeProgressInitialImport(true); // This is for newly imported artists
     setShowScrapeProgress(true);
   };
 
   const handleScrapeComplete = async () => {
     setShowScrapeProgress(false);
     setIsScraping(false);
+    setIsScrapeProgressInitialImport(false);
     
     // Reload data
     await loadArtists();
@@ -386,6 +390,7 @@ function App() {
         <ScrapeProgressModal 
           artists={scrapeProgressArtists}
           onComplete={handleScrapeComplete}
+          isInitialImport={isScrapeProgressInitialImport}
         />
       )}
 
