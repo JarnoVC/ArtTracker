@@ -781,6 +781,10 @@ export async function checkArtistForUpdates(artistId: number, userId: number): P
 
     await page.close();
 
+    // Update last_checked timestamp - this should happen regardless of whether updates are found
+    // The date represents when we last checked, not when we last found updates
+    await db.updateArtist(artistId, userId, { last_checked: new Date().toISOString() });
+
     if (!jsonData?.data || !Array.isArray(jsonData.data) || jsonData.data.length === 0) {
       return { hasUpdates: false };
     }
@@ -807,6 +811,8 @@ export async function checkArtistForUpdates(artistId: number, userId: number): P
   } catch (error: any) {
     await page.close();
     console.error(`  ⚠ Error checking updates for ${artist.username}:`, error.message);
+    // Update last_checked even on error, since we did attempt to check
+    await db.updateArtist(artistId, userId, { last_checked: new Date().toISOString() });
     // If check fails, assume we need to scrape (safer)
     return { hasUpdates: true };
   }
