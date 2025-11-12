@@ -2,6 +2,11 @@ import puppeteer from 'puppeteer';
 import * as db from './database';
 
 const SCRAPE_DELAY = parseInt(process.env.SCRAPE_DELAY_MS || '2000');
+const CONCURRENT_ARTIST_LIMIT = Math.max(1, parseInt(process.env.SCRAPE_CONCURRENCY || '2'));
+const QUICK_CHECK_DELAY = Math.max(200, Math.floor(SCRAPE_DELAY / 5));
+const PAGE_NAVIGATION_DELAY = Math.max(300, Math.floor(SCRAPE_DELAY / 3));
+const CLOUDFLARE_SETTLE_DELAY = Math.max(1500, Math.floor(SCRAPE_DELAY * 0.75));
+const PROFILE_PAGE_WAIT = Math.max(2500, SCRAPE_DELAY);
 
 interface ScrapedArtwork {
   artwork_id: string;
@@ -361,7 +366,7 @@ export async function scrapeArtist(artistId: number, userId: number) {
         }
 
         // Wait for content to load after Cloudflare passes
-        await delay(3000);
+        await delay(CLOUDFLARE_SETTLE_DELAY);
 
       // Extract the JSON data
       const jsonData = await page.evaluate(() => {
@@ -416,7 +421,7 @@ export async function scrapeArtist(artistId: number, userId: number) {
           } else {
             currentPage++;
             // Add a delay between page requests
-            await delay(1000);
+            await delay(PAGE_NAVIGATION_DELAY);
           }
         } else {
           // No more data
@@ -586,7 +591,7 @@ async function scrapeFromProfilePage(artistId: number, userId: number, artist: a
     }
 
     console.log(`     Page loaded, waiting for content...`);
-    await delay(5000); // Wait for JavaScript to execute after Cloudflare
+    await delay(PROFILE_PAGE_WAIT); // Wait for JavaScript to execute after Cloudflare
 
     const data = await page.evaluate(() => {
       const result: any = {
@@ -759,7 +764,7 @@ export async function checkArtistForUpdates(artistId: number, userId: number): P
       }
     }
     
-    await delay(1000);
+    await delay(QUICK_CHECK_DELAY);
 
     const jsonData = await page.evaluate(() => {
       // @ts-ignore - document is available in browser context
@@ -984,7 +989,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
         hasMorePages = false;
       } else {
         currentPage++;
-        await delay(500);
+        await delay(PAGE_NAVIGATION_DELAY);
       }
     } else {
       hasMorePages = false;
@@ -1055,41 +1060,48 @@ export async function scrapeAllArtists(userId: number) {
 
   const results: any[] = [];
 
-  for (const artist of artists) {
+  const processArtist = async (artist: any) => {
+    const start = Date.now();
     try {
-      // Quick check: does this artist have new artworks?
       const checkResult = await checkArtistForUpdates(artist.id, userId);
-      
+
       if (!checkResult.hasUpdates) {
         console.log(`  ⏭ Skipping @${artist.username} - no updates`);
-        results.push({
+        return {
           artist: artist.username,
           status: 'skipped',
-          reason: 'no_updates'
-        });
-        // Small delay even for skipped artists
-        await delay(300);
-        continue;
+          reason: 'no_updates',
+          duration_ms: Date.now() - start
+        };
       }
 
-      // Has updates - scrape only new artworks
       console.log(`  🔍 @${artist.username} has updates, scraping...`);
       const scrapeResult = await scrapeArtistUpdates(artist.id, userId);
-      results.push({
+      return {
         ...scrapeResult,
-        status: 'completed'
-      });
-
-      // Small delay between artists
-      await delay(500);
+        status: 'completed',
+        duration_ms: Date.now() - start
+      };
     } catch (error: any) {
       console.error(`  ✗ Error checking @${artist.username}:`, error.message);
-      results.push({
+      return {
         artist: artist.username,
         status: 'failed',
-        error: error.message
-      });
+        error: error.message,
+        duration_ms: Date.now() - start
+      };
+    } finally {
+      // Gentle pacing between batches
+      await delay(QUICK_CHECK_DELAY);
     }
+  };
+
+  let index = 0;
+  while (index < artists.length) {
+    const batch = artists.slice(index, index + CONCURRENT_ARTIST_LIMIT);
+    const batchResults = await Promise.all(batch.map(processArtist));
+    results.push(...batchResults);
+    index += CONCURRENT_ARTIST_LIMIT;
   }
 
   const completed = results.filter(r => r.status === 'completed').length;

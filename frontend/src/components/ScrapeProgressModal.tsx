@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/aria-proptypes */
 import { useEffect, useState } from 'react';
 import { Artist, getAuthToken } from '../api';
 import axios from 'axios';
@@ -5,6 +6,7 @@ import './ScrapeProgressModal.css';
 
 // Use the same API_BASE as api.ts
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+const MAX_CONCURRENT_REQUESTS = Math.max(1, parseInt(import.meta.env.VITE_SCRAPE_CONCURRENCY || '3'));
 
 // Create axios instance with base URL and default auth header
 const apiClient = axios.create({
@@ -53,90 +55,88 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
   }, []);
 
   const scrapeArtists = async () => {
-    // Always use individual requests for real-time progress updates
-    // This provides better UX as users can see each artist being processed
-    for (let i = 0; i < artists.length; i++) {
-      const artist = artists[i];
-      
-      // Update status to checking and current index
-      setCurrentIndex(i);
-      setProgress(prev => {
-        const updated = [...prev];
-        updated[i] = { ...updated[i], status: 'checking' };
-        return updated;
-      });
+    const total = artists.length;
+    let nextIndex = 0;
 
-      // Give React time to render the update
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      try {
-        // Use optimized scraping endpoint (checks first, only scrapes if updates exist)
-        console.log(`[${i + 1}/${artists.length}] Scraping artist ${artist.id} (${artist.username})...`);
-        
-        // Update to scraping status
-        setProgress(prev => {
-          const updated = [...prev];
-          updated[i] = { ...updated[i], status: 'scraping' };
-          return updated;
-        });
-        
-        // Small delay to show scraping state
-        await new Promise(resolve => setTimeout(resolve, 150));
-        
-        const response = await apiClient.post(`/scrape/artist/${artist.id}?optimized=true`, {});
-        
-        const result = response.data;
-        
-        // Handle skipped status (no updates)
-        if (result.status === 'skipped') {
-          setProgress(prev => {
-            const updated = [...prev];
-            updated[i] = { 
-              ...updated[i], 
-              status: 'skipped',
-              reason: result.reason || 'no_updates',
-              newArtworks: 0
-            };
-            return updated;
-          });
-          console.log(`  ✓ ${artist.username}: Skipped (no updates)`);
-        } else {
-          // Has updates, was scraped
-          const newArtworks = result.new_artworks || 0;
-          const totalFound = result.total_found || 0;
-          setProgress(prev => {
-            const updated = [...prev];
-            updated[i] = { 
-              ...updated[i], 
-              status: 'completed',
-              newArtworks: newArtworks
-            };
-            return updated;
-          });
-          console.log(`  ✓ ${artist.username}: Completed (${newArtworks} new, ${totalFound} total)`);
+    const runWorker = async () => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= total) {
+          return;
         }
-      } catch (error: any) {
-        console.error(`  ✗ Error scraping artist ${artist.id} (${artist.username}):`, error);
-        const errorMessage = error.response?.data?.error || error.message || 'Failed to scrape';
+
+        const artist = artists[i];
+
+        setCurrentIndex(i);
         setProgress(prev => {
           const updated = [...prev];
-          updated[i] = { 
-            ...updated[i], 
-            status: 'failed',
-            error: errorMessage
-          };
+          updated[i] = { ...updated[i], status: 'checking' };
           return updated;
         });
-      }
 
-      // Small delay between artists to avoid overwhelming the backend
-      // Also allows UI to update smoothly and shows progress
-      if (i < artists.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-    }
+        // Allow React to paint before heavy work
+        await new Promise(resolve => setTimeout(resolve, 20));
 
-    // Clear current index when done
+        try {
+          console.log(`[${i + 1}/${total}] Scraping artist ${artist.id} (${artist.username})...`);
+
+          setProgress(prev => {
+            const updated = [...prev];
+            updated[i] = { ...updated[i], status: 'scraping' };
+            return updated;
+          });
+
+          const response = await apiClient.post(`/scrape/artist/${artist.id}?optimized=true`, {});
+          const result = response.data;
+
+          if (result.status === 'skipped') {
+            setProgress(prev => {
+              const updated = [...prev];
+              updated[i] = { 
+                ...updated[i], 
+                status: 'skipped',
+                reason: result.reason || 'no_updates',
+                newArtworks: 0
+              };
+              return updated;
+            });
+            console.log(`  ✓ ${artist.username}: Skipped (no updates)`);
+          } else {
+            const newArtworks = result.new_artworks || 0;
+            const totalFound = result.total_found || 0;
+            setProgress(prev => {
+              const updated = [...prev];
+              updated[i] = { 
+                ...updated[i], 
+                status: 'completed',
+                newArtworks
+              };
+              return updated;
+            });
+            console.log(`  ✓ ${artist.username}: Completed (${newArtworks} new, ${totalFound} total)`);
+          }
+        } catch (error: any) {
+          console.error(`  ✗ Error scraping artist ${artist.id} (${artist.username}):`, error);
+          const errorMessage = error.response?.data?.error || error.message || 'Failed to scrape';
+          setProgress(prev => {
+            const updated = [...prev];
+            updated[i] = { 
+              ...updated[i], 
+              status: 'failed',
+              error: errorMessage
+            };
+            return updated;
+          });
+        } finally {
+          // Gentle pacing between batches
+          await new Promise(resolve => setTimeout(resolve, 40));
+        }
+      }
+    };
+
+    const workerCount = Math.min(MAX_CONCURRENT_REQUESTS, total);
+    await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+
     setCurrentIndex(-1);
     setIsComplete(true);
     console.log(`✅ All artists processed!`);
@@ -147,7 +147,8 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
   const failedCount = progress.filter(p => p.status === 'failed').length;
   const totalNewArtworks = progress.reduce((sum, p) => sum + (p.newArtworks || 0), 0);
   const processedCount = completedCount + skippedCount + failedCount;
-  const progressPercent = Math.round((processedCount / artists.length) * 100);
+  const progressPercent = artists.length === 0 ? 100 : Math.round((processedCount / artists.length) * 100);
+  const progressValue = Math.min(100, Math.max(0, progressPercent));
 
   return (
     <div className="modal-backdrop scrape-modal-backdrop">
@@ -165,12 +166,14 @@ function ScrapeProgressModal({ artists, onComplete }: ScrapeProgressModalProps) 
               <span className="progress-label">
                 Progress: {processedCount} / {artists.length} artists
               </span>
-              <span className="progress-percent">{progressPercent}%</span>
+              <span className="progress-percent">{progressValue}%</span>
             </div>
-            <div className="progress-bar" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Scraping progress">
-              <div 
-                className="progress-fill"
-                style={{ width: `${progressPercent}%` }}
+            <div className="progress-bar">
+              <progress 
+                className="progress-native"
+                value={progressValue}
+                max={100}
+                aria-label="Scraping progress"
               />
             </div>
           </div>
