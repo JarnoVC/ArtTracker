@@ -195,7 +195,8 @@ function App() {
         toast.success(`Loaded ${result.total_found} artworks!`);
       }
       
-      // Reload artworks and new count
+      // Reload artworks, new count, AND artists list to show updated last_checked date
+      await loadArtists();
       await loadArtworks();
       await loadNewCount();
     } catch (error: any) {
