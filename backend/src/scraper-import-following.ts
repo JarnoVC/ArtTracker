@@ -284,7 +284,7 @@ export async function importFollowingFromUser(userId: number, artstationUsername
             timeout: 90000
           });
 
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise(resolve => setTimeout(resolve, 1500)); // Reduced from 3000ms
 
           // Extract the JSON data
           const jsonData = await page.evaluate(() => {
@@ -328,7 +328,7 @@ export async function importFollowingFromUser(userId: number, artstationUsername
               hasMorePages = false;
             } else {
               currentPage++;
-              await new Promise(resolve => setTimeout(resolve, 1000));
+              await new Promise(resolve => setTimeout(resolve, 400)); // Reduced from 1000ms
             }
           } else {
             hasMorePages = false;
@@ -475,7 +475,7 @@ export async function importFollowingFromUser(userId: number, artstationUsername
           
           // Small delay between scraping artists to be respectful
           if (newlyAddedArtists.indexOf(artistId) < newlyAddedArtists.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300)); // Reduced from 500ms
           }
         } catch (error: any) {
           console.error(`  ✗ Failed to load artworks for artist ID ${artistId}:`, error.message);
@@ -669,7 +669,7 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
     
     // Wait for JavaScript to execute and API calls to complete after Cloudflare
     console.log(`     Waiting for page content to load...`);
-    await new Promise(resolve => setTimeout(resolve, 15000)); // Wait 15 seconds for content
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Reduced from 15000ms - wait 5 seconds for content
     
     // Check if page loaded correctly
     const pageInfo = await page.evaluate(() => {
@@ -769,11 +769,11 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
         
         // Scroll more aggressively to trigger lazy loading of additional pages
         await autoScroll(page);
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Reduced from 3000ms
         
         // Scroll again and wait more
         await autoScroll(page);
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Reduced from 5000ms
         
         // Re-check API responses after scrolling
         console.log(`     🔍 Re-checking API responses after scroll (now have ${apiResponses.length} responses)...`);
@@ -849,7 +849,7 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
             }
             
             // Small delay between page fetches to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 1000ms
           }
           
           console.log(`     📊 Final count: ${artists.length} of ${totalCount} artists fetched`);
@@ -1015,7 +1015,7 @@ async function fetchFollowingFromHTMLPage(browser: any, artstationUsername: stri
     if (artists.length === 0) {
       console.log(`     No data yet, scrolling to trigger lazy loading...`);
       await autoScroll(page);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Reduced from 5000ms
       
       // Check API responses again after scrolling
       if (apiResponses.length > 0 && artists.length === 0) {
