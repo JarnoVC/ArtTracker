@@ -5,6 +5,7 @@ import ArtistList from './components/ArtistList';
 import ArtworkGrid from './components/ArtworkGrid';
 import ImportFollowingModal from './components/ImportFollowingModal';
 import ScrapeProgressModal from './components/ScrapeProgressModal';
+import SyncProgressModal from './components/SyncProgressModal';
 import ConfirmModal from './components/ConfirmModal';
 import LoginModal from './components/LoginModal';
 import { Artist, Artwork, getArtists, getArtworks, getNewCount, clearDatabase, importFollowing, scrapeArtist, getCurrentUser, logout, getAuthToken, User } from './api';
@@ -22,6 +23,8 @@ function App() {
   const [isScraping, setIsScraping] = useState(false);
   const [showScrapeProgress, setShowScrapeProgress] = useState(false);
   const [scrapeProgressArtists, setScrapeProgressArtists] = useState<Artist[]>([]);
+  const [showSyncProgress, setShowSyncProgress] = useState(false);
+  const [isSyncComplete, setIsSyncComplete] = useState(false);
   const [newCount, setNewCount] = useState(0);
   const [showNewOnly, setShowNewOnly] = useState(false);
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
@@ -216,15 +219,15 @@ function App() {
   const handleSyncWithArtStation = async () => {
     // For sync, we don't need to provide username - it uses the user's ArtStation username from their profile
     // If they don't have one, the backend will return an error
+    setShowSyncProgress(true);
+    setIsSyncComplete(false);
     setIsLoadingArtists(true);
     try {
-      toast.loading('Syncing with ArtStation...', { id: 'sync' });
-      
       // Refresh sync: clearExisting = false (syncs list - adds new, removes unfollowed)
       // Pass empty string to use user's stored ArtStation username
       const importResults = await importFollowing('', false);
       
-      toast.dismiss('sync');
+      setIsSyncComplete(true);
       
       let message = '';
       if (importResults.added > 0) {
@@ -251,13 +254,18 @@ function App() {
       // Update the new count counter in the header
       await loadNewCount();
     } catch (error: any) {
-      toast.dismiss('sync');
+      setShowSyncProgress(false);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to sync with ArtStation';
       toast.error(`Failed to sync: ${errorMessage}`);
       console.error('Sync error:', error);
     } finally {
       setIsLoadingArtists(false);
     }
+  };
+
+  const handleSyncComplete = () => {
+    setShowSyncProgress(false);
+    setIsSyncComplete(false);
   };
 
   const handleClearDatabase = async () => {
@@ -378,6 +386,13 @@ function App() {
         <ScrapeProgressModal 
           artists={scrapeProgressArtists}
           onComplete={handleScrapeComplete}
+        />
+      )}
+
+      {showSyncProgress && (
+        <SyncProgressModal 
+          isComplete={isSyncComplete}
+          onComplete={handleSyncComplete}
         />
       )}
 
