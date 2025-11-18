@@ -32,13 +32,17 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
     setArtistsFound(0);
     setArtistsAdded(0);
     
+    // Allow React to render the initial state
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
       // First, import artists without scraping artworks (we'll do that with progress modal)
       // Pass username only if provided, otherwise empty string to use profile's ArtStation username
       
-      // Update status during processing
+      // Update status during processing - allow React to render
       setLoadingPhase('processing');
       setCurrentStatus('Processing artists...');
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       const importResults = await importFollowing(username.trim() || '', clearExisting, true);
       
@@ -47,12 +51,15 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
       setArtistsFound(importResults.total_found || 0);
       setArtistsAdded(importResults.added || 0);
       
+      // Allow React to render the complete state with artist counts
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       // If we have newly added artists, show progress modal to load their artworks
       if (importResults.newly_added_artist_ids && importResults.newly_added_artist_ids.length > 0) {
         setCurrentStatus(`Found ${importResults.newly_added_artist_ids.length} new artist${importResults.newly_added_artist_ids.length > 1 ? 's' : ''}. Loading their artworks...`);
         
-        // Small delay to show the status update
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Allow React to render the status update before closing
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
         // Fetch the artist details for the progress modal
         const allArtists = await getArtists();
@@ -138,7 +145,8 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
                   </div>
                 </div>
                 
-                {(loadingPhase === 'fetching' || loadingPhase === 'processing') && (
+                {(loadingPhase === 'fetching' || loadingPhase === 'processing' || 
+                  (loadingPhase === 'complete' && currentStatus.includes('Loading their artworks'))) && (
                   <div className="progress-bar-container">
                     <div className="progress-bar-indeterminate">
                       <div className="progress-bar-fill"></div>
