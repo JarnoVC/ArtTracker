@@ -16,7 +16,7 @@ router.post('/artist/:id', async (req, res) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
     const artistId = parseInt(req.params.id);
-    const optimized = req.query.optimized === 'true' || req.query.optimized === true;
+    const optimized = req.query.optimized === 'true';
     
     console.log(`📥 Scrape request: artistId=${artistId}, userId=${req.user.id}, optimized=${optimized}`);
     

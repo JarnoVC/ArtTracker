@@ -93,8 +93,10 @@ async function checkAllUsersArtworks(): Promise<ScheduledTaskResult[]> {
       // Use optimized scraping (checks first, only scrapes if updates exist)
       const scrapeResults = await scrapeAllArtists(user.id);
 
-      const totalNew = scrapeResults.reduce((sum, r: any) => sum + (r.new_artworks || 0), 0);
-      const updated = scrapeResults.filter((r: any) => r.new_artworks > 0).length;
+      // Handle both return types: with results array or message (no artists)
+      const resultsArray = Array.isArray(scrapeResults.results) ? scrapeResults.results : [];
+      const totalNew = scrapeResults.total_new_artworks || 0;
+      const updated = scrapeResults.completed || 0;
 
       results.push({
         userId: user.id,
