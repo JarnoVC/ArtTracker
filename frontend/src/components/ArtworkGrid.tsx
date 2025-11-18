@@ -11,9 +11,10 @@ interface ArtworkGridProps {
   selectedArtist?: Artist;
   onScrapeArtist?: (artistId: number) => Promise<void>;
   isLoading?: boolean;
+  onOpenMobileArtistList?: () => void;
 }
 
-function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, selectedArtist, onScrapeArtist, isLoading = false }: ArtworkGridProps) {
+function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, selectedArtist, onScrapeArtist, isLoading = false, onOpenMobileArtistList }: ArtworkGridProps) {
   const newCount = artworks.filter(a => a.is_new).length;
   const [isScraping, setIsScraping] = useState(false);
 
@@ -56,21 +57,32 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
     <main className="artwork-grid-container">
       <div className="artwork-header">
         <div className="artwork-header-left">
-          <h2>
-            {selectedArtist ? (
-              <>Artworks by @{selectedArtist.username}</>
-            ) : (
-              <>Latest from All Artists</>
-            )}
-          </h2>
-          <span className="artwork-count">
-            {selectedArtist ? (
-              `${artworks.length} artwork${artworks.length !== 1 ? 's' : ''}`
-            ) : (
-              `Latest from ${artworks.length} artist${artworks.length !== 1 ? 's' : ''}`
-            )}
-            {newCount > 0 && ` · ${newCount} new`}
-          </span>
+          {onOpenMobileArtistList && (
+            <button 
+              className="mobile-menu-toggle"
+              onClick={onOpenMobileArtistList}
+              title="Show Artists"
+            >
+              ☰
+            </button>
+          )}
+          <div className="artwork-header-title">
+            <h2>
+              {selectedArtist ? (
+                <>Artworks by @{selectedArtist.username}</>
+              ) : (
+                <>Latest from All Artists</>
+              )}
+            </h2>
+            <span className="artwork-count">
+              {selectedArtist ? (
+                `${artworks.length} artwork${artworks.length !== 1 ? 's' : ''}`
+              ) : (
+                `Latest from ${artworks.length} artist${artworks.length !== 1 ? 's' : ''}`
+              )}
+              {newCount > 0 && ` · ${newCount} new`}
+            </span>
+          </div>
         </div>
 
         <div className="artwork-actions">

@@ -10,9 +10,11 @@ interface ArtistListProps {
   onArtistDeleted: () => void;
   onSyncWithArtStation: () => void;
   isLoading?: boolean;
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted, onSyncWithArtStation, isLoading = false }: ArtistListProps) {
+function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted, onSyncWithArtStation, isLoading = false, isMobileOpen = false, onMobileClose }: ArtistListProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -45,18 +47,34 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
   };
 
   return (
-    <aside className="artist-list">
-      <div className="artist-list-header">
-        <h2>Following ({artists.length})</h2>
-        <button 
-          className={`btn-icon ${isSyncing ? 'syncing' : ''}`}
-          onClick={handleSync} 
-          disabled={isSyncing}
-          title="Sync with ArtStation (re-import following list)"
-        >
-          {isSyncing ? '⏳' : '🔄'}
-        </button>
-      </div>
+    <>
+      {/* Mobile overlay */}
+      {isMobileOpen && onMobileClose && (
+        <div className="mobile-overlay" onClick={onMobileClose}></div>
+      )}
+      <aside className={`artist-list ${isMobileOpen ? 'mobile-open' : ''}`}>
+        <div className="artist-list-header">
+          <h2>Following ({artists.length})</h2>
+          <div className="artist-list-header-actions">
+            <button 
+              className={`btn-icon ${isSyncing ? 'syncing' : ''}`}
+              onClick={handleSync} 
+              disabled={isSyncing}
+              title="Sync with ArtStation (re-import following list)"
+            >
+              {isSyncing ? '⏳' : '🔄'}
+            </button>
+            {onMobileClose && (
+              <button 
+                className="btn-icon mobile-close-btn"
+                onClick={onMobileClose}
+                title="Close"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
 
       <div className="filter-section">
         <button
@@ -125,6 +143,7 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
         )}
       </div>
     </aside>
+    </>
   );
 }
 

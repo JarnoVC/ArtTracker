@@ -30,6 +30,7 @@ function App() {
   const [showNewOnly, setShowNewOnly] = useState(false);
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
   const [isLoadingArtworks, setIsLoadingArtworks] = useState(false);
+  const [isMobileArtistListOpen, setIsMobileArtistListOpen] = useState(false);
 
   // Check authentication on mount (only once)
   useEffect(() => {
@@ -361,10 +362,15 @@ function App() {
         <ArtistList 
           artists={artists}
           selectedArtistId={selectedArtistId}
-          onSelectArtist={setSelectedArtistId}
+          onSelectArtist={(id) => {
+            setSelectedArtistId(id);
+            setIsMobileArtistListOpen(false); // Close mobile drawer when artist is selected
+          }}
           onArtistDeleted={handleArtistDeleted}
           onSyncWithArtStation={handleSyncWithArtStation}
           isLoading={isLoadingArtists}
+          isMobileOpen={isMobileArtistListOpen}
+          onMobileClose={() => setIsMobileArtistListOpen(false)}
         />
         
         <ArtworkGrid 
@@ -375,6 +381,7 @@ function App() {
           selectedArtist={artists.find(a => a.id === selectedArtistId)}
           onScrapeArtist={handleScrapeSingleArtist}
           isLoading={isLoadingArtworks}
+          onOpenMobileArtistList={() => setIsMobileArtistListOpen(true)}
         />
       </div>
       

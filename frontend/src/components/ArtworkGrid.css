@@ -21,6 +21,31 @@
 .artwork-header-left {
   flex: 1;
   min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.mobile-menu-toggle {
+  display: none;
+  background: var(--surface-light);
+  color: var(--text);
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.mobile-menu-toggle:hover {
+  background-color: var(--border);
+}
+
+.artwork-header-title {
+  flex: 1;
+  min-width: 0;
 }
 
 .artwork-header h2 {
@@ -198,6 +223,14 @@
 }
 
 @media (max-width: 768px) {
+  .mobile-menu-toggle {
+    display: block;
+  }
+
+  .artwork-grid-container {
+    width: 100%;
+  }
+
   .artwork-grid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 1rem;
@@ -207,6 +240,10 @@
   .artwork-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .artwork-header-left {
+    width: 100%;
   }
 
   .artwork-actions {
