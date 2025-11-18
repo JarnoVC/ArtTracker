@@ -3,6 +3,15 @@ import { importFollowing, getArtists, Artist } from '../api';
 import { toast } from 'react-hot-toast';
 import './ImportFollowingModal.css';
 
+// Helper to ensure React renders state updates
+const flushRender = () => new Promise(resolve => {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      setTimeout(resolve, 100);
+    });
+  });
+});
+
 interface ImportFollowingModalProps {
   onClose: () => void;
   onImportComplete: () => void;
@@ -32,18 +41,22 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
     setArtistsFound(0);
     setArtistsAdded(0);
     
-    // Allow React to render the initial state
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Allow React to render the initial "fetching" state
+    await flushRender();
     
     try {
       // First, import artists without scraping artworks (we'll do that with progress modal)
       // Pass username only if provided, otherwise empty string to use profile's ArtStation username
       
-      // Update status during processing - allow React to render
+      // Update status to "processing" - allow React to render this change
+      // Note: During the importFollowing() call below, React can't render updates
+      // because JavaScript is blocking on the await. This is why we update the status
+      // BEFORE the blocking call, and then update it AFTER the call completes.
       setLoadingPhase('processing');
-      setCurrentStatus('Processing artists...');
-      await new Promise(resolve => setTimeout(resolve, 100));
+      setCurrentStatus('Processing artists and adding to your list...');
+      await flushRender();
       
+      // This is a blocking call - React can't render during this time
       const importResults = await importFollowing(username.trim() || '', clearExisting, true);
       
       setResults(importResults);
@@ -52,14 +65,19 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
       setArtistsAdded(importResults.added || 0);
       
       // Allow React to render the complete state with artist counts
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await flushRender();
       
       // If we have newly added artists, show progress modal to load their artworks
       if (importResults.newly_added_artist_ids && importResults.newly_added_artist_ids.length > 0) {
-        setCurrentStatus(`Found ${importResults.newly_added_artist_ids.length} new artist${importResults.newly_added_artist_ids.length > 1 ? 's' : ''}. Loading their artworks...`);
+        // Show a clear message about what's happening next
+        const artistCount = importResults.newly_added_artist_ids.length;
+        setCurrentStatus(`Found ${artistCount} new artist${artistCount > 1 ? 's' : ''}! Loading their artworks...`);
+        setArtistsFound(importResults.total_found || 0);
+        setArtistsAdded(importResults.added || 0);
         
-        // Allow React to render the status update before closing
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Allow React to render the status update before closing - longer delay so user sees it
+        await flushRender();
+        await new Promise(resolve => setTimeout(resolve, 2500));
         
         // Fetch the artist details for the progress modal
         const allArtists = await getArtists();
