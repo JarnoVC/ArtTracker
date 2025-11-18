@@ -22,10 +22,29 @@ services:
         value: /opt/render/.cache/puppeteer
       - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
         value: "false"
+      - key: ENABLE_SCHEDULER
+        value: "true"
+      - key: CRON_SYNC_SCHEDULE
+        value: "0 9 * * *"
+      - key: CRON_ARTWORK_CHECK_SCHEDULE
+        value: "0 */6 * * *"
+      - key: CRON_API_KEY
+        sync: false  # Set a secure API key in Render dashboard for external cron services
 
 databases:
   - name: arttracker-db
     databaseName: arttracker
     user: arttracker
     plan: free
+
+# Optional: Render Cron Jobs (requires paid plan)
+# Uncomment and configure if you want to use Render's cron service instead of node-cron
+# This is recommended for more reliability
+# cronJobs:
+#   - name: daily-sync
+#     schedule: "0 9 * * *"  # Daily at 9 AM UTC
+#     command: curl -X POST http://arttracker-backend.onrender.com/api/cron/sync
+#   - name: artwork-check
+#     schedule: "0 */6 * * *"  # Every 6 hours
+#     command: curl -X POST http://arttracker-backend.onrender.com/api/cron/check-artworks
 

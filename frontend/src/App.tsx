@@ -26,6 +26,7 @@ function App() {
   const [isScrapeProgressInitialImport, setIsScrapeProgressInitialImport] = useState(false);
   const [showSyncProgress, setShowSyncProgress] = useState(false);
   const [isSyncComplete, setIsSyncComplete] = useState(false);
+  const [isScrapingFromSync, setIsScrapingFromSync] = useState(false);
   const [newCount, setNewCount] = useState(0);
   const [showNewOnly, setShowNewOnly] = useState(false);
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
@@ -177,16 +178,24 @@ function App() {
   };
 
   const handleScrapeComplete = async () => {
+    const wasFromSync = isScrapingFromSync;
+    
     setShowScrapeProgress(false);
     setIsScraping(false);
     setIsScrapeProgressInitialImport(false);
+    setIsScrapingFromSync(false);
     
     // Reload data
     await loadArtists();
     await loadArtworks();
     await loadNewCount();
     
-    toast.success('Scraping complete!');
+    // Check if this was triggered from sync
+    if (wasFromSync) {
+      toast.success('Sync and artwork loading complete!');
+    } else {
+      toast.success('Scraping complete!');
+    }
   };
 
   const handleScrapeSingleArtist = async (artistId: number) => {
@@ -230,7 +239,29 @@ function App() {
     try {
       // Refresh sync: clearExisting = false (syncs list - adds new, removes unfollowed)
       // Pass empty string to use user's stored ArtStation username
-      const importResults = await importFollowing('', false);
+      // Use skipArtworkScraping = true so we can show progress in ScrapeProgressModal
+      const importResults = await importFollowing('', false, true);
+      
+      // If we have newly added artists, show progress modal to load their artworks
+      if (importResults.newly_added_artist_ids && importResults.newly_added_artist_ids.length > 0) {
+        // Close sync modal and show scrape progress modal
+        setShowSyncProgress(false);
+        setIsScrapingFromSync(true); // Track that scraping is part of sync
+        
+        // Fetch the artist details for the progress modal
+        const allArtists = await getArtists();
+        const newlyAddedArtists = allArtists.filter(artist => 
+          importResults.newly_added_artist_ids.includes(artist.id)
+        );
+        
+        // Show scrape progress for newly added artists
+        setScrapeProgressArtists(newlyAddedArtists);
+        setIsScrapeProgressInitialImport(true); // Use full scrape for new artists
+        setShowScrapeProgress(true);
+        
+        // Wait for scraping to complete (handled by handleScrapeComplete)
+        return;
+      }
       
       setIsSyncComplete(true);
       
@@ -260,6 +291,7 @@ function App() {
       await loadNewCount();
     } catch (error: any) {
       setShowSyncProgress(false);
+      setShowScrapeProgress(false);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to sync with ArtStation';
       toast.error(`Failed to sync: ${errorMessage}`);
       console.error('Sync error:', error);

@@ -15,6 +15,7 @@ A mobile-friendly web app to monitor new uploads from your favorite ArtStation c
 - 🎯 **Filter Options** - View all artworks or just new ones
 - 💾 **Local Storage** - Uses JSON file storage for simple, lightweight data persistence
 - ⏱️ **Rate Limiting** - Gentle scraping with configurable delays (default 2s)
+- 📅 **Automated Daily Checkups** - Automatically sync following lists and check for new artworks on a schedule
 
 ## 🏗️ Tech Stack
 
@@ -178,10 +179,11 @@ CORS_ORIGIN=https://your-frontend-domain.com
 npm start
 ```
 
-4. **Set up scheduled scraping** (optional):
-   - Use cron job or platform scheduler
-   - Run: `npm run scrape`
-   - Recommended: Every 1-6 hours
+4. **Set up scheduled tasks** (optional):
+   - See [SCHEDULED_TASKS.md](./SCHEDULED_TASKS.md) for detailed setup
+   - Built-in scheduler: Set `ENABLE_SCHEDULER=true` in environment variables
+   - Runs daily sync (9 AM UTC) and artwork checks (every 6 hours) automatically
+   - Or use Render Cron Jobs or external cron services
 
 ### Frontend (Vercel / Netlify)
 

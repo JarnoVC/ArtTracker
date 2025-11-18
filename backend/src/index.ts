@@ -3,12 +3,14 @@ import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { initDatabase } from './database';
+import { initScheduler } from './scheduler';
 import authRoutes from './routes/auth';
 import artistRoutes from './routes/artists';
 import artworkRoutes from './routes/artworks';
 import scrapeRoutes from './routes/scrape';
 import importRoutes from './routes/import';
 import databaseRoutes from './routes/database';
+import cronRoutes from './routes/cron';
 
 dotenv.config();
 
@@ -44,6 +46,9 @@ app.use(morgan('dev'));
 // Initialize database
 initDatabase();
 
+// Initialize scheduler (if enabled)
+initScheduler();
+
 // Routes
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -58,6 +63,9 @@ app.use('/api/artworks', artworkRoutes);
 app.use('/api/scrape', scrapeRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/database', databaseRoutes);
+
+// Cron endpoints (require API key if CRON_API_KEY is set)
+app.use('/api/cron', cronRoutes);
 
 // Error handling
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
