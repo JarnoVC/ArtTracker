@@ -14,6 +14,10 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
   const [clearExisting, setClearExisting] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [loadingPhase, setLoadingPhase] = useState<'idle' | 'fetching' | 'processing' | 'complete'>('idle');
+  const [currentStatus, setCurrentStatus] = useState('');
+  const [artistsFound, setArtistsFound] = useState(0);
+  const [artistsAdded, setArtistsAdded] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,16 +27,33 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
     
     setIsLoading(true);
     setResults(null);
+    setLoadingPhase('fetching');
+    setCurrentStatus('Fetching your following list from ArtStation...');
+    setArtistsFound(0);
+    setArtistsAdded(0);
     
     try {
       // First, import artists without scraping artworks (we'll do that with progress modal)
       // Pass username only if provided, otherwise empty string to use profile's ArtStation username
+      
+      // Update status during processing
+      setLoadingPhase('processing');
+      setCurrentStatus('Processing artists...');
+      
       const importResults = await importFollowing(username.trim() || '', clearExisting, true);
       
       setResults(importResults);
+      setLoadingPhase('complete');
+      setArtistsFound(importResults.total_found || 0);
+      setArtistsAdded(importResults.added || 0);
       
       // If we have newly added artists, show progress modal to load their artworks
       if (importResults.newly_added_artist_ids && importResults.newly_added_artist_ids.length > 0) {
+        setCurrentStatus(`Found ${importResults.newly_added_artist_ids.length} new artist${importResults.newly_added_artist_ids.length > 1 ? 's' : ''}. Loading their artworks...`);
+        
+        // Small delay to show the status update
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         // Fetch the artist details for the progress modal
         const allArtists = await getArtists();
         const newlyAddedArtists = allArtists.filter(artist => 
@@ -44,6 +65,7 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
         onShowProgress(newlyAddedArtists);
       } else {
         // No new artists to scrape, just reload data and close
+        setCurrentStatus('Import complete!');
         if (importResults.added > 0) {
           toast.success(`Successfully imported ${importResults.added} artist${importResults.added > 1 ? 's' : ''}!`);
         } else if (importResults.already_exists === importResults.total_found) {
@@ -54,9 +76,14 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
         onImportComplete();
       }
     } catch (error: any) {
+      setLoadingPhase('idle');
+      setCurrentStatus('');
       toast.error(error.response?.data?.error || 'Failed to import following list');
     } finally {
       setIsLoading(false);
+      if (results && (!results.newly_added_artist_ids || results.newly_added_artist_ids.length === 0)) {
+        setLoadingPhase('idle');
+      }
     }
   };
 
@@ -80,44 +107,82 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            <p className="import-description">
-              Import all artists you follow on ArtStation. Your ArtStation username is stored privately and not displayed.
-            </p>
-            
-            <label htmlFor="username" className="form-label">
-              ArtStation Username (Optional)
-            </label>
-            <input
-              id="username"
-              type="text"
-              className="form-input"
-              placeholder="Leave empty to use saved username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoFocus
-              disabled={isLoading}
-            />
-            <p className="form-hint">
-              {username.trim() 
-                ? 'This will update your saved ArtStation username and import artists.' 
-                : 'If you\'ve set an ArtStation username before, it will be used. Otherwise, enter one now.'}
-            </p>
+            {!isLoading && !results && (
+              <>
+                <p className="import-description">
+                  Import all artists you follow on ArtStation. Your ArtStation username is stored privately and not displayed.
+                </p>
+                
+                <label htmlFor="username" className="form-label">
+                  ArtStation Username (Optional)
+                </label>
+              </>
+            )}
 
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={clearExisting}
-                onChange={(e) => setClearExisting(e.target.checked)}
-                disabled={isLoading}
-              />
-              <span>Replace existing artists (recommended)</span>
-            </label>
-            <p className="form-hint">
-              {clearExisting 
-                ? '⚠️ This will remove all current artists and replace them with your followed list.' 
-                : 'This will add to your existing artists (may create duplicates).'
-              }
-            </p>
+            {isLoading && (
+              <div className="import-progress">
+                <div className="progress-status">
+                  <span className="progress-icon">
+                    {loadingPhase === 'fetching' && '🔍'}
+                    {loadingPhase === 'processing' && '⚙️'}
+                    {loadingPhase === 'complete' && '✓'}
+                  </span>
+                  <div className="progress-text">
+                    <p className="progress-main">{currentStatus}</p>
+                    {artistsFound > 0 && (
+                      <p className="progress-detail">
+                        Found {artistsFound} artist{artistsFound !== 1 ? 's' : ''} 
+                        {artistsAdded > 0 && ` · ${artistsAdded} new`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                {(loadingPhase === 'fetching' || loadingPhase === 'processing') && (
+                  <div className="progress-bar-container">
+                    <div className="progress-bar-indeterminate">
+                      <div className="progress-bar-fill"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isLoading && !results && (
+              <>
+                <input
+                  id="username"
+                  type="text"
+                  className="form-input"
+                  placeholder="Leave empty to use saved username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoFocus
+                  disabled={isLoading}
+                />
+                <p className="form-hint">
+                  {username.trim() 
+                    ? 'This will update your saved ArtStation username and import artists.' 
+                    : 'If you\'ve set an ArtStation username before, it will be used. Otherwise, enter one now.'}
+                </p>
+
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={clearExisting}
+                    onChange={(e) => setClearExisting(e.target.checked)}
+                    disabled={isLoading}
+                  />
+                  <span>Replace existing artists (recommended)</span>
+                </label>
+                <p className="form-hint">
+                  {clearExisting 
+                    ? '⚠️ This will remove all current artists and replace them with your followed list.' 
+                    : 'This will add to your existing artists (may create duplicates).'
+                  }
+                </p>
+              </>
+            )}
 
             {results && (
               <div className="import-results">
@@ -171,7 +236,9 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
                   {isLoading ? (
                     <>
                       <span className="spinner">🔄</span>
-                      Importing...
+                      {loadingPhase === 'fetching' ? 'Fetching...' : 
+                       loadingPhase === 'processing' ? 'Processing...' : 
+                       'Importing...'}
                     </>
                   ) : (
                     'Import Following'
