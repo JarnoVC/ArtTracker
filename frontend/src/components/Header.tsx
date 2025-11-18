@@ -9,9 +9,10 @@ interface HeaderProps {
   newCount: number;
   user: User | null;
   onLogout: () => void;
+  onOpenSettings: () => void;
 }
 
-function Header({ onImportFollowing, onClearDatabase, onScrapeAll, isScraping, newCount, user, onLogout }: HeaderProps) {
+function Header({ onImportFollowing, onClearDatabase, onScrapeAll, isScraping, newCount, user, onLogout, onOpenSettings }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-content">
@@ -27,13 +28,22 @@ function Header({ onImportFollowing, onClearDatabase, onScrapeAll, isScraping, n
         
         <div className="header-actions">
           {user && (
-            <button 
-              className="btn btn-secondary"
-              onClick={onLogout}
-              title="Logout"
-            >
-              🚪 Logout
-            </button>
+            <>
+              <button 
+                className="btn btn-secondary"
+                onClick={onOpenSettings}
+                title="Settings"
+              >
+                ⚙️ Settings
+              </button>
+              <button 
+                className="btn btn-secondary"
+                onClick={onLogout}
+                title="Logout"
+              >
+                🚪 Logout
+              </button>
+            </>
           )}
           <button 
             className="btn btn-secondary"

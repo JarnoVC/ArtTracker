@@ -8,6 +8,7 @@ import ScrapeProgressModal from './components/ScrapeProgressModal';
 import SyncProgressModal from './components/SyncProgressModal';
 import ConfirmModal from './components/ConfirmModal';
 import LoginModal from './components/LoginModal';
+import SettingsModal from './components/SettingsModal';
 import { Artist, Artwork, getArtists, getArtworks, getNewCount, clearDatabase, importFollowing, scrapeArtist, getCurrentUser, logout, getAuthToken, User } from './api';
 import './App.css';
 
@@ -32,6 +33,7 @@ function App() {
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
   const [isLoadingArtworks, setIsLoadingArtworks] = useState(false);
   const [isMobileArtistListOpen, setIsMobileArtistListOpen] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Check authentication on mount (only once)
   useEffect(() => {
@@ -388,6 +390,7 @@ function App() {
         newCount={newCount}
         user={user}
         onLogout={handleLogout}
+        onOpenSettings={() => setShowSettingsModal(true)}
       />
       
       <div className="main-container">
@@ -452,6 +455,12 @@ function App() {
             handleClearDatabase();
           }}
           onCancel={() => setShowClearConfirm(false)}
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal 
+          onClose={() => setShowSettingsModal(false)}
         />
       )}
     </div>

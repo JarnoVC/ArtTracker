@@ -9,6 +9,8 @@ export interface User {
   artstation_username?: string;
   token: string;
   created_at: string;
+  discord_webhook_url?: string;
+  discord_user_id?: string;
 }
 
 export interface Artist {
@@ -94,7 +96,9 @@ export async function getAllUsers(): Promise<User[]> {
     username: row.username,
     artstation_username: row.artstation_username || undefined,
     token: row.token,
-    created_at: row.created_at.toISOString()
+    created_at: row.created_at.toISOString(),
+    discord_webhook_url: row.discord_webhook_url || undefined,
+    discord_user_id: row.discord_user_id || undefined
   }));
 }
 
@@ -107,7 +111,9 @@ export async function getUserById(id: number): Promise<User | undefined> {
     username: row.username,
     artstation_username: row.artstation_username || undefined,
     token: row.token,
-    created_at: row.created_at.toISOString()
+    created_at: row.created_at.toISOString(),
+    discord_webhook_url: row.discord_webhook_url || undefined,
+    discord_user_id: row.discord_user_id || undefined
   };
 }
 
@@ -120,7 +126,9 @@ export async function getUserByUsername(username: string): Promise<User | undefi
     username: row.username,
     artstation_username: row.artstation_username || undefined,
     token: row.token,
-    created_at: row.created_at.toISOString()
+    created_at: row.created_at.toISOString(),
+    discord_webhook_url: row.discord_webhook_url || undefined,
+    discord_user_id: row.discord_user_id || undefined
   };
 }
 
@@ -133,7 +141,9 @@ export async function getUserByToken(token: string): Promise<User | undefined> {
     username: row.username,
     artstation_username: row.artstation_username || undefined,
     token: row.token,
-    created_at: row.created_at.toISOString()
+    created_at: row.created_at.toISOString(),
+    discord_webhook_url: row.discord_webhook_url || undefined,
+    discord_user_id: row.discord_user_id || undefined
   };
 }
 
@@ -178,6 +188,14 @@ export async function updateUser(id: number, updates: Partial<User>): Promise<bo
   if (updates.artstation_username !== undefined) {
     fields.push(`artstation_username = $${paramIndex++}`);
     values.push(updates.artstation_username || null);
+  }
+  if (updates.discord_webhook_url !== undefined) {
+    fields.push(`discord_webhook_url = $${paramIndex++}`);
+    values.push(updates.discord_webhook_url || null);
+  }
+  if (updates.discord_user_id !== undefined) {
+    fields.push(`discord_user_id = $${paramIndex++}`);
+    values.push(updates.discord_user_id || null);
   }
 
   if (fields.length === 0) return false;

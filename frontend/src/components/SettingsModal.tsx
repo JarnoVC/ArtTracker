@@ -1,0 +1,153 @@
+import { useState, useEffect } from 'react';
+import { getUserProfile, updateUserProfile } from '../api';
+import { toast } from 'react-hot-toast';
+import './SettingsModal.css';
+
+interface SettingsModalProps {
+  onClose: () => void;
+}
+
+function SettingsModal({ onClose }: SettingsModalProps) {
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+  const [discordUserId, setDiscordUserId] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load current settings on mount
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    setIsLoading(true);
+    try {
+      const profile = await getUserProfile();
+      setDiscordWebhookUrl(profile.discord_webhook_url || '');
+      setDiscordUserId(profile.discord_user_id || '');
+    } catch (error: any) {
+      toast.error('Failed to load settings');
+      console.error('Error loading settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+
+    try {
+      await updateUserProfile({
+        discord_webhook_url: discordWebhookUrl.trim() || null,
+        discord_user_id: discordUserId.trim() || null
+      });
+      toast.success('Settings saved successfully!');
+      onClose();
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to save settings';
+      toast.error(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleClear = () => {
+    setDiscordWebhookUrl('');
+    setDiscordUserId('');
+  };
+
+  return (
+    <div className="modal-backdrop settings-backdrop" onClick={onClose}>
+      <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>⚙️ Settings</h2>
+          <button className="modal-close" onClick={onClose} title="Close">
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="settings-section">
+              <h3 className="settings-section-title">🔔 Discord Notifications</h3>
+              <p className="settings-description">
+                Configure Discord webhooks to receive notifications when artists you follow post new artwork.
+                Notifications are only sent when checking for updates (not during initial imports).
+              </p>
+
+              <label htmlFor="discord-webhook" className="form-label">
+                Discord Webhook URL
+              </label>
+              <input
+                id="discord-webhook"
+                type="url"
+                className="form-input"
+                placeholder="https://discord.com/api/webhooks/..."
+                value={discordWebhookUrl}
+                onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                disabled={isLoading || isSaving}
+              />
+              <p className="form-hint">
+                Create a webhook in your Discord server: Server Settings → Integrations → Webhooks → New Webhook
+              </p>
+
+              <label htmlFor="discord-user-id" className="form-label">
+                Discord User ID (Optional)
+              </label>
+              <input
+                id="discord-user-id"
+                type="text"
+                className="form-input"
+                placeholder="123456789012345678"
+                value={discordUserId}
+                onChange={(e) => setDiscordUserId(e.target.value)}
+                disabled={isLoading || isSaving}
+                pattern="\d{17,19}"
+                title="Discord User ID should be 17-19 digits"
+              />
+              <p className="form-hint">
+                Your Discord User ID for @mentions. Enable Developer Mode in Discord, then right-click your name → Copy User ID
+              </p>
+            </div>
+          </div>
+
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleClear}
+              disabled={isLoading || isSaving}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={isLoading || isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <span className="spinner">⏳</span>
+                  Saving...
+                </>
+              ) : (
+                'Save Settings'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default SettingsModal;
+

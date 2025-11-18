@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer';
 import * as db from './database';
+import { sendDiscordNotification } from './notifications/discord';
 
 const SCRAPE_DELAY = parseInt(process.env.SCRAPE_DELAY_MS || '2000');
 const CONCURRENT_ARTIST_LIMIT = 1; // Sequential processing for Render free tier stability
@@ -1012,8 +1013,17 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
     }
   }
 
-  // Store only new artworks
+  // Store only new artworks and collect notification data
   let newCount = 0;
+  const newArtworksForNotification: Array<{
+    title: string;
+    artistName: string;
+    artistDisplayName?: string;
+    artworkUrl: string;
+    thumbnailUrl?: string;
+    uploadDate?: string;
+  }> = [];
+
   for (const artwork of artworks) {
     const result = await db.addArtwork(
       userId,
@@ -1026,6 +1036,15 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
     );
     if (result.isNew) {
       newCount++;
+      // Collect data for Discord notification
+      newArtworksForNotification.push({
+        title: artwork.title,
+        artistName: artist.username,
+        artistDisplayName: artist.display_name || userInfo?.full_name,
+        artworkUrl: artwork.artwork_url,
+        thumbnailUrl: artwork.thumbnail_url,
+        uploadDate: artwork.upload_date
+      });
     }
   }
 
@@ -1033,6 +1052,21 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
   await db.updateArtist(artistId, userId, { last_checked: new Date().toISOString() });
 
   console.log(`  ✓ ${newCount} new artworks added (checked ${currentPage} page(s))`);
+
+  // Send Discord notifications if new artworks were found (only for update checks, not initial imports)
+  if (newCount > 0 && newArtworksForNotification.length > 0) {
+    try {
+      await sendDiscordNotification(
+        userId,
+        artist.username,
+        artist.display_name || userInfo?.full_name,
+        newArtworksForNotification
+      );
+    } catch (error: any) {
+      // Don't fail scraping if notification fails
+      console.error(`  ⚠️  Failed to send Discord notification:`, error.message);
+    }
+  }
 
   return {
     artist: artist.username,

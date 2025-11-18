@@ -18,6 +18,8 @@ export interface User {
   artstation_username?: string;
   token: string;
   created_at: string;
+  discord_webhook_url?: string;
+  discord_user_id?: string;
 }
 
 export interface Artist {

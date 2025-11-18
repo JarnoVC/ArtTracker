@@ -11,6 +11,7 @@ import scrapeRoutes from './routes/scrape';
 import importRoutes from './routes/import';
 import databaseRoutes from './routes/database';
 import cronRoutes from './routes/cron';
+import userRoutes from './routes/user';
 
 dotenv.config();
 
@@ -58,6 +59,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 
 // Protected routes (require authentication)
+app.use('/api/user', userRoutes);
 app.use('/api/artists', artistRoutes);
 app.use('/api/artworks', artworkRoutes);
 app.use('/api/scrape', scrapeRoutes);

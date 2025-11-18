@@ -133,6 +133,9 @@ export const clearDatabase = async (): Promise<any> => {
 export interface User {
   id: number;
   username: string;
+  artstation_username?: string;
+  discord_webhook_url?: string | null;
+  discord_user_id?: string | null;
   token?: string; // Only present in login/register responses
   created_at: string;
 }
@@ -162,6 +165,20 @@ export const getCurrentUser = async (): Promise<User> => {
 
 export const updateUser = async (artstation_username?: string): Promise<User> => {
   const response = await axios.patch(`${API_BASE}/auth/me`, { artstation_username });
+  return response.data;
+};
+
+// User profile API (includes Discord settings)
+export const getUserProfile = async (): Promise<User> => {
+  const response = await axios.get(`${API_BASE}/user`);
+  return response.data;
+};
+
+export const updateUserProfile = async (updates: {
+  discord_webhook_url?: string | null;
+  discord_user_id?: string | null;
+}): Promise<{ success: boolean; user: User }> => {
+  const response = await axios.patch(`${API_BASE}/user`, updates);
   return response.data;
 };
 
