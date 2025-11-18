@@ -133,6 +133,23 @@ function SettingsModal({ onClose }: SettingsModalProps) {
               <p className="form-hint">
                 Your Discord User ID for @mentions. Enable Developer Mode in Discord, then right-click your name → Copy User ID
               </p>
+
+              <button
+                type="button"
+                className="btn btn-secondary test-notification-btn"
+                onClick={handleTest}
+                disabled={isLoading || isSaving || isTesting || !discordWebhookUrl.trim()}
+                title="Send a test notification using your latest artwork from 'Latest from All Artists'"
+              >
+                {isTesting ? (
+                  <>
+                    <span className="spinner">⏳</span>
+                    Testing...
+                  </>
+                ) : (
+                  '🧪 Test Notification'
+                )}
+              </button>
             </div>
           </div>
 
@@ -144,22 +161,6 @@ function SettingsModal({ onClose }: SettingsModalProps) {
               disabled={isLoading || isSaving || isTesting}
             >
               Clear
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleTest}
-              disabled={isLoading || isSaving || isTesting || !discordWebhookUrl.trim()}
-              title="Send a test notification using your latest artwork from 'Latest from All Artists'"
-            >
-              {isTesting ? (
-                <>
-                  <span className="spinner">⏳</span>
-                  Testing...
-                </>
-              ) : (
-                '🧪 Test Notification'
-              )}
             </button>
             <button
               type="button"

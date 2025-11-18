@@ -126,6 +126,14 @@
   line-height: 1.4;
 }
 
+.test-notification-btn {
+  width: 100%;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
 .settings-modal .modal-footer {
   padding: 16px 24px 24px;
   display: flex;
