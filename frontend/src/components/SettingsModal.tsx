@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getUserProfile, updateUserProfile } from '../api';
+import { getUserProfile, updateUserProfile, testDiscordNotification } from '../api';
 import { toast } from 'react-hot-toast';
 import './SettingsModal.css';
 
@@ -12,6 +12,7 @@ function SettingsModal({ onClose }: SettingsModalProps) {
   const [discordUserId, setDiscordUserId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
 
   // Load current settings on mount
   useEffect(() => {
@@ -56,6 +57,30 @@ function SettingsModal({ onClose }: SettingsModalProps) {
     setDiscordUserId('');
   };
 
+  const handleTest = async () => {
+    if (!discordWebhookUrl.trim()) {
+      toast.error('Please enter a Discord webhook URL first');
+      return;
+    }
+
+    setIsTesting(true);
+    try {
+      const result = await testDiscordNotification();
+      if (result.artwork) {
+        toast.success(`Test notification sent! Check your Discord channel. Using: "${result.artwork.title}" by ${result.artwork.artist}`, {
+          duration: 5000
+        });
+      } else {
+        toast.success('Test notification sent! Check your Discord channel.');
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to send test notification';
+      toast.error(errorMessage);
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   return (
     <div className="modal-backdrop settings-backdrop" onClick={onClose}>
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
@@ -85,7 +110,7 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                 placeholder="https://discord.com/api/webhooks/..."
                 value={discordWebhookUrl}
                 onChange={(e) => setDiscordWebhookUrl(e.target.value)}
-                disabled={isLoading || isSaving}
+                disabled={isLoading || isSaving || isTesting}
               />
               <p className="form-hint">
                 Create a webhook in your Discord server: Server Settings → Integrations → Webhooks → New Webhook
@@ -101,7 +126,7 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                 placeholder="123456789012345678"
                 value={discordUserId}
                 onChange={(e) => setDiscordUserId(e.target.value)}
-                disabled={isLoading || isSaving}
+                disabled={isLoading || isSaving || isTesting}
                 pattern="\d{17,19}"
                 title="Discord User ID should be 17-19 digits"
               />
@@ -116,22 +141,38 @@ function SettingsModal({ onClose }: SettingsModalProps) {
               type="button"
               className="btn btn-secondary"
               onClick={handleClear}
-              disabled={isLoading || isSaving}
+              disabled={isLoading || isSaving || isTesting}
             >
               Clear
             </button>
             <button
               type="button"
               className="btn btn-secondary"
+              onClick={handleTest}
+              disabled={isLoading || isSaving || isTesting || !discordWebhookUrl.trim()}
+              title="Send a test notification using your latest artwork from 'Latest from All Artists'"
+            >
+              {isTesting ? (
+                <>
+                  <span className="spinner">⏳</span>
+                  Testing...
+                </>
+              ) : (
+                '🧪 Test Notification'
+              )}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
               onClick={onClose}
-              disabled={isSaving}
+              disabled={isSaving || isTesting}
             >
               Cancel
             </button>
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={isLoading || isSaving}
+              disabled={isLoading || isSaving || isTesting}
             >
               {isSaving ? (
                 <>

@@ -182,6 +182,11 @@ export const updateUserProfile = async (updates: {
   return response.data;
 };
 
+export const testDiscordNotification = async (): Promise<{ success: boolean; message: string; artwork?: { title: string; artist: string } }> => {
+  const response = await axios.post(`${API_BASE}/user/test-discord`);
+  return response.data;
+};
+
 export const logout = () => {
   setAuthToken(null);
 };
