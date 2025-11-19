@@ -9,6 +9,7 @@ import SyncProgressModal from './components/SyncProgressModal';
 import LoginModal from './components/LoginModal';
 import SettingsModal from './components/SettingsModal';
 import { Artist, Artwork, getArtists, getArtworks, getNewCount, importFollowing, scrapeArtist, getCurrentUser, logout, getAuthToken, User } from './api';
+import { loadCachedData, saveCachedData, clearCachedData } from './offlineCache.ts';
 import './App.css';
 
 function App() {
@@ -32,16 +33,40 @@ function App() {
   const [isLoadingArtworks, setIsLoadingArtworks] = useState(false);
   const [isMobileArtistListOpen, setIsMobileArtistListOpen] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Check authentication on mount (only once)
   useEffect(() => {
-    // Clear any invalid tokens first
     const token = getAuthToken();
     if (token) {
-      // Check if token is valid
-      checkAuth();
+      if (navigator.onLine) {
+        checkAuth();
+      } else {
+        const cached = loadCachedData();
+        if (cached?.user) {
+          setUser(cached.user);
+          setIsAuthenticated(true);
+          setIsCheckingAuth(false);
+          if (cached.artists) setArtists(cached.artists);
+          if (cached.artworks) setArtworks(cached.artworks);
+          if (cached.newCount !== undefined) setNewCount(cached.newCount);
+        } else {
+          setIsCheckingAuth(false);
+          setIsAuthenticated(false);
+        }
+      }
     } else {
-      // No token, skip auth check
       setIsCheckingAuth(false);
       setIsAuthenticated(false);
     }
@@ -75,11 +100,13 @@ function App() {
       const currentUser = await getCurrentUser();
       setUser(currentUser);
       setIsAuthenticated(true);
+      saveCachedData({ user: currentUser });
     } catch (error: any) {
       // Token invalid or expired, clear it
       console.log('Auth check failed:', error.response?.status);
       logout();
       setIsAuthenticated(false);
+      clearCachedData();
     } finally {
       setIsCheckingAuth(false);
     }
@@ -92,6 +119,7 @@ function App() {
       const currentUser = await getCurrentUser();
       setUser(currentUser);
       setIsAuthenticated(true);
+      saveCachedData({ user: currentUser });
     } catch (error: any) {
       console.error('Failed to get user after login:', error);
       // If this fails, user might need to login again
@@ -106,6 +134,7 @@ function App() {
     setArtists([]);
     setArtworks([]);
     setSelectedArtistId(null);
+    clearCachedData();
     toast.success('Logged out');
   };
 
@@ -120,9 +149,24 @@ function App() {
     if (showLoading) {
       setIsLoadingArtists(true);
     }
+
+    if (!navigator.onLine) {
+      const cached = loadCachedData();
+      if (cached?.artists) {
+        setArtists(cached.artists);
+      } else {
+        toast.error('Offline and no cached artists available');
+      }
+      if (showLoading) {
+        setIsLoadingArtists(false);
+      }
+      return;
+    }
+
     try {
       const data = await getArtists();
       setArtists(data);
+      saveCachedData({ artists: data });
     } catch (error) {
       toast.error('Failed to load artists');
     } finally {
@@ -136,11 +180,26 @@ function App() {
     if (showLoading) {
       setIsLoadingArtworks(true);
     }
+
+    if (!navigator.onLine) {
+      const cached = loadCachedData();
+      if (cached?.artworks && cached.selectedArtistId === selectedArtistId) {
+        setArtworks(cached.artworks);
+      } else {
+        toast.error('Offline and no cached artworks for this view');
+      }
+      if (showLoading) {
+        setIsLoadingArtworks(false);
+      }
+      return;
+    }
+
     try {
       // Show only latest per artist when viewing "All Artists"
       const latestPerArtist = selectedArtistId === null;
       const data = await getArtworks(selectedArtistId, showNewOnly, latestPerArtist);
       setArtworks(data);
+      saveCachedData({ artworks: data, selectedArtistId });
     } catch (error) {
       toast.error('Failed to load artworks');
     } finally {
@@ -151,9 +210,17 @@ function App() {
   };
 
   const loadNewCount = async () => {
+    if (!navigator.onLine) {
+      const cached = loadCachedData();
+      if (cached?.newCount !== undefined) {
+        setNewCount(cached.newCount);
+      }
+      return;
+    }
     try {
       const data = await getNewCount();
       setNewCount(data.count);
+      saveCachedData({ newCount: data.count });
     } catch (error) {
       console.error('Failed to load new count');
     }
@@ -162,6 +229,11 @@ function App() {
   const handleScrapeAll = async () => {
     if (artists.length === 0) {
       toast.error('No artists to scrape. Add some artists first!');
+      return;
+    }
+
+    if (!navigator.onLine) {
+      toast.error('Cannot check for updates while offline');
       return;
     }
     
@@ -200,8 +272,12 @@ function App() {
 
   const handleScrapeSingleArtist = async (artistId: number) => {
     try {
+      if (!navigator.onLine) {
+        toast.error('Cannot load artworks while offline');
+        return;
+      }
+
       toast.loading('Loading artworks...', { id: 'scrape-single' });
-      
       const result = await scrapeArtist(artistId);
       
       toast.dismiss('scrape-single');
@@ -225,12 +301,20 @@ function App() {
 
 
   const handleImportComplete = async () => {
+    if (!navigator.onLine) {
+      toast.error('Cannot import while offline');
+      return;
+    }
     await loadArtists();
     await loadArtworks();
     await loadNewCount();
   };
 
   const handleSyncWithArtStation = async () => {
+    if (!navigator.onLine) {
+      toast.error('Cannot sync while offline');
+      return;
+    }
     // For sync, we don't need to provide username - it uses the user's ArtStation username from their profile
     // If they don't have one, the backend will return an error
     setShowSyncProgress(true);
@@ -364,6 +448,12 @@ function App() {
           },
         }}
       />
+      
+      {isOffline && (
+        <div className="offline-banner">
+          <span>Offline mode: showing last synced data</span>
+        </div>
+      )}
       
       <Header 
         onImportFollowing={() => setIsImportModalOpen(true)}
