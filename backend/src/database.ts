@@ -150,6 +150,18 @@ export async function getArtworksWithArtistInfo(user_id: number, filters?: { art
   return toPromise(jsonDb.getArtworksWithArtistInfo(user_id, filters));
 }
 
+export interface AddArtworkOptions {
+  allowInsert?: boolean;
+  markUpdatesAsNew?: boolean;
+}
+
+export interface AddArtworkResult {
+  artwork: Artwork | null;
+  isNew: boolean;
+  wasUpdated?: boolean;
+  skipped?: boolean;
+}
+
 export async function addArtwork(
   user_id: number,
   artist_id: number,
@@ -157,12 +169,13 @@ export async function addArtwork(
   title: string,
   thumbnail_url: string,
   artwork_url: string,
-  upload_date?: string
-): Promise<{ artwork: Artwork; isNew: boolean; wasUpdated?: boolean }> {
+  upload_date?: string,
+  options?: AddArtworkOptions
+): Promise<AddArtworkResult> {
   if (usePostgres) {
-    return pgDb.addArtwork(user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date);
+    return pgDb.addArtwork(user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date, options);
   }
-  return toPromise(jsonDb.addArtwork(user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date));
+  return toPromise(jsonDb.addArtwork(user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date, options));
 }
 
 export async function markArtworkSeen(id: number, user_id: number): Promise<boolean> {

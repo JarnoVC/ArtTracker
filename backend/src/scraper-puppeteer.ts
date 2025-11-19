@@ -15,6 +15,7 @@ interface ScrapedArtwork {
   thumbnail_url: string;
   artwork_url: string;
   upload_date?: string;
+  alreadyExists?: boolean;
 }
 
 function delay(ms: number): Promise<void> {
@@ -825,7 +826,14 @@ export async function checkArtistForUpdates(artistId: number, userId: number): P
 }
 
 // Optimized scraping: Only scrape new artworks, stop when finding existing ones
-export async function scrapeArtistUpdates(artistId: number, userId: number) {
+interface ScrapeArtistUpdateOptions {
+  fullRescan?: boolean;
+  allowInsert?: boolean;
+  markUpdatesAsNew?: boolean;
+  notify?: boolean;
+}
+
+export async function scrapeArtistUpdates(artistId: number, userId: number, options?: ScrapeArtistUpdateOptions) {
   const artist = await db.getArtistById(artistId, userId);
   if (!artist) {
     throw new Error('Artist not found');
@@ -836,6 +844,22 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
   const isInitialImport = existingArtworks.length === 0;
   const existingArtworkIds = new Set(existingArtworks.map(a => a.artwork_id));
 
+  const fullRescan = options?.fullRescan ?? false;
+  const allowInsert = options?.allowInsert ?? true;
+  const markUpdatesAsNew = options?.markUpdatesAsNew ?? !isInitialImport;
+  const notify = options?.notify ?? !isInitialImport;
+
+  if (fullRescan && existingArtworks.length === 0) {
+    console.log(`  ⏭ Skipping ${artist.username} full rescan - no existing artworks in database`);
+    return {
+      artist: artist.username,
+      total_found: 0,
+      new_artworks: 0,
+      updated_artworks: 0,
+      skipped_reason: 'no_existing_artworks'
+    };
+  }
+
   console.log(`🔍 Scraping updates for ${artist.username}...`);
 
   const browser = await getBrowser();
@@ -845,7 +869,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
   let foundExistingArtwork = false;
   let userInfo: any = null;
 
-  while (hasMorePages && !foundExistingArtwork) {
+  while (hasMorePages && (!foundExistingArtwork || fullRescan)) {
     console.log(`  → Fetching page ${currentPage}...`);
     
     const page = await browser.newPage();
@@ -965,12 +989,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
       for (const project of jsonData.data) {
         if (!project.hash_id) continue;
 
-        // If we already have this artwork, we've caught up - stop scraping
-        if (existingArtworkIds.has(project.hash_id)) {
-          foundExistingArtwork = true;
-          console.log(`     Found existing artwork, stopping at page ${currentPage}`);
-          break;
-        }
+        const alreadyExists = existingArtworkIds.has(project.hash_id);
 
         const artwork: ScrapedArtwork = {
           artwork_id: project.hash_id,
@@ -980,14 +999,21 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
                         project.cover?.url || 
                         project.smaller_square_cover_url || '',
           artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
-          upload_date: project.published_at || project.created_at
+          upload_date: project.published_at || project.created_at,
+          alreadyExists
         };
 
         artworks.push(artwork);
+
+        if (alreadyExists && !fullRescan) {
+          foundExistingArtwork = true;
+          console.log(`     Found existing artwork, stopping at page ${currentPage}`);
+          break;
+        }
       }
 
       // Check if there are more pages
-      if (jsonData.data.length < 50 || foundExistingArtwork) {
+      if (jsonData.data.length < 50 || (foundExistingArtwork && !fullRescan)) {
         hasMorePages = false;
       } else {
         currentPage++;
@@ -1016,6 +1042,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
 
   // Store only new artworks and collect notification data
   let newCount = 0;
+  let updatedCount = 0;
   const newArtworksForNotification: Array<{
     title: string;
     artistName: string;
@@ -1034,12 +1061,16 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
       artwork.title,
       artwork.thumbnail_url,
       artwork.artwork_url,
-      artwork.upload_date
-    );
-    if (result.isNew || result.wasUpdated) {
-      if (result.wasUpdated) {
-        console.log(`    ↺ Updated artwork detected: ${artwork.title}`);
+      artwork.upload_date,
+      {
+        allowInsert: artwork.alreadyExists ? true : allowInsert,
+        markUpdatesAsNew: artwork.alreadyExists ? markUpdatesAsNew : true
       }
+    );
+    if (result.skipped) {
+      continue;
+    }
+    if (result.isNew) {
       newCount++;
       newArtworksForNotification.push({
         title: artwork.title,
@@ -1048,7 +1079,19 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
         artworkUrl: artwork.artwork_url,
         thumbnailUrl: artwork.thumbnail_url,
         uploadDate: artwork.upload_date,
-        changeType: result.wasUpdated ? 'updated' : 'new'
+        changeType: 'new'
+      });
+    } else if (result.wasUpdated) {
+      updatedCount++;
+      console.log(`    ↺ Updated artwork detected: ${artwork.title}`);
+      newArtworksForNotification.push({
+        title: artwork.title,
+        artistName: artist.username,
+        artistDisplayName: artist.display_name || userInfo?.full_name,
+        artworkUrl: artwork.artwork_url,
+        thumbnailUrl: artwork.thumbnail_url,
+        uploadDate: artwork.upload_date,
+        changeType: 'updated'
       });
     }
   }
@@ -1056,10 +1099,10 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
   // Update last_checked timestamp
   await db.updateArtist(artistId, userId, { last_checked: new Date().toISOString() });
 
-  console.log(`  ✓ ${newCount} new artworks added (checked ${currentPage} page(s))`);
+  console.log(`  ✓ ${newCount} new, ${updatedCount} updated artworks processed (checked ${currentPage} page(s))`);
 
   // Send Discord notifications if new artworks were found (only for update checks, not initial imports)
-  if (!isInitialImport && newCount > 0 && newArtworksForNotification.length > 0) {
+  if (notify && newArtworksForNotification.length > 0) {
     try {
       await sendDiscordNotification(
         userId,
@@ -1078,7 +1121,8 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
   return {
     artist: artist.username,
     total_found: artworks.length,
-    new_artworks: newCount
+    new_artworks: newCount,
+    updated_artworks: updatedCount
   };
 }
 
@@ -1146,18 +1190,84 @@ export async function scrapeAllArtists(userId: number) {
   const skipped = results.filter(r => r.status === 'skipped').length;
   const failed = results.filter(r => r.status === 'failed').length;
   const totalNew = results.reduce((sum, r) => sum + (r.new_artworks || 0), 0);
+  const totalUpdated = results.reduce((sum, r) => sum + (r.updated_artworks || 0), 0);
 
   console.log(`\n✅ Check complete!`);
   console.log(`   Updated: ${completed} artists`);
   console.log(`   Skipped: ${skipped} artists (no updates)`);
   console.log(`   Failed: ${failed} artists`);
   console.log(`   Total new artworks: ${totalNew}`);
+  if (totalUpdated > 0) {
+    console.log(`   Total updated artworks: ${totalUpdated}`);
+  }
 
   return {
     completed,
     skipped,
     failed,
     total_new_artworks: totalNew,
+    total_updated_artworks: totalUpdated,
+    total_artists: artists.length,
+    results
+  };
+}
+
+export async function rescanAllArtists(userId: number) {
+  const artists = await db.getAllArtists(userId);
+  
+  if (artists.length === 0) {
+    return { 
+      message: 'No artists to rescan', 
+      processed: 0,
+      failed: 0,
+      total_updated_artworks: 0,
+      results: [] 
+    };
+  }
+
+  console.log(`\n🧹 Running full rescan for ${artists.length} artists...\n`);
+
+  const results: any[] = [];
+
+  for (const artist of artists) {
+    const start = Date.now();
+    try {
+      const rescanResult = await scrapeArtistUpdates(artist.id, userId, {
+        fullRescan: true,
+        allowInsert: false,
+        markUpdatesAsNew: false,
+        notify: false
+      });
+      results.push({
+        ...rescanResult,
+        status: 'completed',
+        duration_ms: Date.now() - start
+      });
+      await delay(PAGE_NAVIGATION_DELAY);
+    } catch (error: any) {
+      console.error(`  ✗ Error rescanning @${artist.username}:`, error.message);
+      results.push({
+        artist: artist.username,
+        status: 'failed',
+        error: error.message,
+        duration_ms: Date.now() - start
+      });
+    }
+  }
+
+  const processed = results.filter(r => r.status === 'completed').length;
+  const failed = results.filter(r => r.status === 'failed').length;
+  const totalUpdated = results.reduce((sum, r) => sum + (r.updated_artworks || 0), 0);
+
+  console.log(`\n✅ Full rescan complete!`);
+  console.log(`   Processed: ${processed} artists`);
+  console.log(`   Failed: ${failed} artists`);
+  console.log(`   Updated artworks: ${totalUpdated}`);
+
+  return {
+    processed,
+    failed,
+    total_updated_artworks: totalUpdated,
     total_artists: artists.length,
     results
   };

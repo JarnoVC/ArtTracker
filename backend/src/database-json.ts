@@ -323,6 +323,11 @@ export function getArtworksWithArtistInfo(user_id: number, filters?: { artist_id
   });
 }
 
+interface AddArtworkOptions {
+  allowInsert?: boolean;
+  markUpdatesAsNew?: boolean;
+}
+
 export function addArtwork(
   user_id: number,
   artist_id: number,
@@ -330,8 +335,10 @@ export function addArtwork(
   title: string,
   thumbnail_url: string,
   artwork_url: string,
-  upload_date?: string
-): { artwork: Artwork; isNew: boolean; wasUpdated?: boolean } {
+  upload_date?: string,
+  options: AddArtworkOptions = {}
+): { artwork: Artwork | null; isNew: boolean; wasUpdated?: boolean; skipped?: boolean } {
+  const { allowInsert = true, markUpdatesAsNew = true } = options;
   const existing = db.artworks.find(
     a => a.user_id === user_id && a.artist_id === artist_id && a.artwork_id === artwork_id
   );
@@ -348,12 +355,18 @@ export function addArtwork(
       existing.thumbnail_url = thumbnail_url;
       existing.artwork_url = artwork_url;
       existing.upload_date = upload_date;
-      existing.is_new = 1;
+      if (markUpdatesAsNew) {
+        existing.is_new = 1;
+      }
       saveDatabase();
       return { artwork: existing, isNew: false, wasUpdated: true };
     }
 
     return { artwork: existing, isNew: false, wasUpdated: false };
+  }
+
+  if (!allowInsert) {
+    return { artwork: null, isNew: false, wasUpdated: false, skipped: true };
   }
 
   const artwork: Artwork = {

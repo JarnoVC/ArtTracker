@@ -1,12 +1,13 @@
 import cron from 'node-cron';
 import * as db from './database';
 import { importFollowingFromUser } from './scraper-import-following';
-import { scrapeAllArtists } from './scraper-puppeteer';
+import { scrapeAllArtists, rescanAllArtists } from './scraper-puppeteer';
 
 // Schedule configuration
 const ENABLE_SCHEDULER = process.env.ENABLE_SCHEDULER === 'true';
 const CRON_SYNC_SCHEDULE = process.env.CRON_SYNC_SCHEDULE || '0 9 * * *'; // Daily at 9 AM UTC
 const CRON_ARTWORK_CHECK_SCHEDULE = process.env.CRON_ARTWORK_CHECK_SCHEDULE || '0 */6 * * *'; // Every 6 hours
+const CRON_FULL_RESCAN_SCHEDULE = process.env.CRON_FULL_RESCAN_SCHEDULE || '0 0 * * 0'; // Weekly on Sunday at 00:00 UTC
 
 interface ScheduledTaskResult {
   userId: number;
@@ -126,6 +127,51 @@ async function checkAllUsersArtworks(): Promise<ScheduledTaskResult[]> {
 }
 
 /**
+ * Run a full rescan to detect edited artworks (weekly)
+ */
+async function rescanAllUsersArtworks(): Promise<ScheduledTaskResult[]> {
+  console.log('🧹 [Scheduler] Starting weekly full rescan for edits...');
+  const users = await db.getAllUsers();
+  const results: ScheduledTaskResult[] = [];
+
+  for (const user of users) {
+    try {
+      const artists = await db.getAllArtists(user.id);
+
+      if (artists.length === 0) {
+        console.log(`  ⏭ Skipping user ${user.username} - no artists to rescan`);
+        continue;
+      }
+
+      const rescanResult = await rescanAllArtists(user.id);
+
+      results.push({
+        userId: user.id,
+        username: user.username,
+        success: true,
+        details: {
+          artists_scanned: artists.length,
+          updated_artworks: rescanResult.total_updated_artworks || 0
+        }
+      });
+
+      console.log(`    ✓ Rescan complete for ${user.username}: ${rescanResult.total_updated_artworks || 0} updated artwork(s)`);
+    } catch (error: any) {
+      console.error(`    ✗ Error rescanning artworks for user ${user.username}:`, error.message);
+      results.push({
+        userId: user.id,
+        username: user.username,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  console.log(`✅ [Scheduler] Weekly rescan complete. Processed ${results.length} users.`);
+  return results;
+}
+
+/**
  * Initialize the scheduler
  */
 export function initScheduler(): void {
@@ -137,6 +183,7 @@ export function initScheduler(): void {
   console.log('📅 [Scheduler] Initializing scheduled tasks...');
   console.log(`   Sync schedule: ${CRON_SYNC_SCHEDULE} (daily sync)`);
   console.log(`   Artwork check schedule: ${CRON_ARTWORK_CHECK_SCHEDULE} (artwork updates)`);
+  console.log(`   Full rescan schedule: ${CRON_FULL_RESCAN_SCHEDULE} (weekly edit scan)`);
 
   // Schedule daily sync (check for new artists)
   cron.schedule(CRON_SYNC_SCHEDULE, async () => {
@@ -164,6 +211,19 @@ export function initScheduler(): void {
     timezone: 'UTC'
   });
 
+  // Schedule weekly full rescan for edits
+  cron.schedule(CRON_FULL_RESCAN_SCHEDULE, async () => {
+    console.log(`\n⏰ [Scheduler] Running scheduled full rescan at ${new Date().toISOString()}`);
+    try {
+      await rescanAllUsersArtworks();
+    } catch (error: any) {
+      console.error('❌ [Scheduler] Error in scheduled full rescan:', error);
+    }
+  }, {
+    scheduled: true,
+    timezone: 'UTC'
+  });
+
   console.log('✅ [Scheduler] Scheduled tasks initialized');
 }
 
@@ -176,5 +236,9 @@ export async function runSyncAllUsers(): Promise<ScheduledTaskResult[]> {
 
 export async function runCheckAllUsersArtworks(): Promise<ScheduledTaskResult[]> {
   return await checkAllUsersArtworks();
+}
+
+export async function runFullRescanAllUsers(): Promise<ScheduledTaskResult[]> {
+  return await rescanAllUsersArtworks();
 }
 

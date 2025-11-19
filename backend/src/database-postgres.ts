@@ -370,6 +370,11 @@ export async function getArtworksWithArtistInfo(user_id: number, filters?: { art
   });
 }
 
+interface AddArtworkOptions {
+  allowInsert?: boolean;
+  markUpdatesAsNew?: boolean;
+}
+
 export async function addArtwork(
   user_id: number,
   artist_id: number,
@@ -377,8 +382,10 @@ export async function addArtwork(
   title: string,
   thumbnail_url: string,
   artwork_url: string,
-  upload_date?: string
-): Promise<{ artwork: Artwork; isNew: boolean; wasUpdated?: boolean }> {
+  upload_date?: string,
+  options: AddArtworkOptions = {}
+): Promise<{ artwork: Artwork | null; isNew: boolean; wasUpdated?: boolean; skipped?: boolean }> {
+  const { allowInsert = true, markUpdatesAsNew = true } = options;
   // Check if artwork already exists
   const existingResult = await query(
     'SELECT * FROM artworks WHERE user_id = $1 AND artist_id = $2 AND artwork_id = $3',
@@ -402,10 +409,10 @@ export async function addArtwork(
              thumbnail_url = $2,
              artwork_url = $3,
              upload_date = $4,
-             is_new = 1
-         WHERE id = $5
+             is_new = CASE WHEN $5 THEN 1 ELSE is_new END
+         WHERE id = $6
          RETURNING *`,
-        [title, thumbnail_url, artwork_url, newUploadDate, row.id]
+        [title, thumbnail_url, artwork_url, newUploadDate, markUpdatesAsNew, row.id]
       );
       const updated = updateResult.rows[0];
       return {
@@ -441,6 +448,15 @@ export async function addArtwork(
       },
       isNew: false,
       wasUpdated: false
+    };
+  }
+
+  if (!allowInsert) {
+    return {
+      artwork: null,
+      isNew: false,
+      wasUpdated: false,
+      skipped: true
     };
   }
 
