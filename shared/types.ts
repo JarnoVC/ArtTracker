@@ -18,6 +18,7 @@ export interface Artwork {
   thumbnail_url: string;
   artwork_url: string;
   upload_date?: string;
+  last_updated_at?: string;
   is_new: number;
   discovered_at: string;
 }

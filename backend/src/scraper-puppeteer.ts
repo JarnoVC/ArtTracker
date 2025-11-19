@@ -15,6 +15,7 @@ interface ScrapedArtwork {
   thumbnail_url: string;
   artwork_url: string;
   upload_date?: string;
+  updated_at?: string;
   alreadyExists?: boolean;
 }
 
@@ -397,16 +398,17 @@ export async function scrapeArtist(artistId: number, userId: number) {
           jsonData.data.forEach((project: any) => {
             if (!project.hash_id) return;
 
-            const artwork: ScrapedArtwork = {
-              artwork_id: project.hash_id,
-              title: project.title || 'Untitled',
-              thumbnail_url: project.cover?.thumb_url || 
-                            project.cover?.small_square_url || 
-                            project.cover?.url || 
-                            project.smaller_square_cover_url || '',
-              artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
-              upload_date: project.published_at || project.created_at
-            };
+          const artwork: ScrapedArtwork = {
+            artwork_id: project.hash_id,
+            title: project.title || 'Untitled',
+            thumbnail_url: project.cover?.thumb_url || 
+                          project.cover?.small_square_url || 
+                          project.cover?.url || 
+                          project.smaller_square_cover_url || '',
+            artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
+            upload_date: project.published_at || project.created_at,
+            updated_at: project.updated_at || project.published_at || project.created_at
+          };
 
             artworks.push(artwork);
           });
@@ -471,7 +473,8 @@ export async function scrapeArtist(artistId: number, userId: number) {
         artwork.title,
         artwork.thumbnail_url,
         artwork.artwork_url,
-        artwork.upload_date
+      artwork.upload_date,
+      artwork.updated_at
       );
       if (result.isNew) {
         newCount++;
@@ -619,7 +622,8 @@ async function scrapeFromProfilePage(artistId: number, userId: number, artist: a
                 title: project.title || 'Untitled',
                 thumbnail_url: project.cover?.thumb_url || project.cover?.small_square_url || project.cover?.url || '',
                 artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
-                upload_date: project.published_at || project.created_at
+                upload_date: project.published_at || project.created_at,
+                updated_at: project.updated_at || project.published_at || project.created_at
               });
             });
           }
@@ -650,7 +654,8 @@ async function scrapeFromProfilePage(artistId: number, userId: number, artist: a
         artwork.title,
         artwork.thumbnail_url,
         artwork.artwork_url,
-        artwork.upload_date
+        artwork.upload_date,
+        artwork.updated_at
       );
       if (result.isNew) {
         newCount++;
@@ -1062,6 +1067,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number, opti
       artwork.thumbnail_url,
       artwork.artwork_url,
       artwork.upload_date,
+      artwork.updated_at,
       {
         allowInsert: artwork.alreadyExists ? true : allowInsert,
         markUpdatesAsNew: artwork.alreadyExists ? markUpdatesAsNew : true

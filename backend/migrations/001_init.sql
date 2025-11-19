@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS artworks (
   thumbnail_url TEXT NOT NULL,
   artwork_url TEXT NOT NULL,
   upload_date TIMESTAMP,
+  last_updated_at TIMESTAMP,
   is_new INTEGER DEFAULT 1,
   discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(user_id, artist_id, artwork_id)
