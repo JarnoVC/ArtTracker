@@ -6,10 +6,9 @@ import ArtworkGrid from './components/ArtworkGrid';
 import ImportFollowingModal from './components/ImportFollowingModal';
 import ScrapeProgressModal from './components/ScrapeProgressModal';
 import SyncProgressModal from './components/SyncProgressModal';
-import ConfirmModal from './components/ConfirmModal';
 import LoginModal from './components/LoginModal';
 import SettingsModal from './components/SettingsModal';
-import { Artist, Artwork, getArtists, getArtworks, getNewCount, clearDatabase, importFollowing, scrapeArtist, getCurrentUser, logout, getAuthToken, User } from './api';
+import { Artist, Artwork, getArtists, getArtworks, getNewCount, importFollowing, scrapeArtist, getCurrentUser, logout, getAuthToken, User } from './api';
 import './App.css';
 
 function App() {
@@ -20,7 +19,6 @@ function App() {
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [selectedArtistId, setSelectedArtistId] = useState<number | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
   const [showScrapeProgress, setShowScrapeProgress] = useState(false);
   const [scrapeProgressArtists, setScrapeProgressArtists] = useState<Artist[]>([]);
@@ -307,21 +305,6 @@ function App() {
     setIsSyncComplete(false);
   };
 
-  const handleClearDatabase = async () => {
-    try {
-      const result = await clearDatabase();
-      toast.success(`Database cleared: ${result.deleted_artists} artists, ${result.deleted_artworks} artworks`);
-      
-      // Reload everything
-      await loadArtists();
-      await loadArtworks();
-      await loadNewCount();
-      setSelectedArtistId(null);
-    } catch (error) {
-      toast.error('Failed to clear database');
-    }
-  };
-
   const handleArtistDeleted = () => {
     loadArtists();
     if (selectedArtistId) {
@@ -384,7 +367,6 @@ function App() {
       
       <Header 
         onImportFollowing={() => setIsImportModalOpen(true)}
-        onClearDatabase={() => setShowClearConfirm(true)}
         onScrapeAll={handleScrapeAll}
         isScraping={isScraping}
         newCount={newCount}
@@ -440,21 +422,6 @@ function App() {
         <SyncProgressModal 
           isComplete={isSyncComplete}
           onComplete={handleSyncComplete}
-        />
-      )}
-
-      {showClearConfirm && (
-        <ConfirmModal 
-          title="⚠️ Clear Database?"
-          message="This will permanently delete ALL artists and artworks from your database. This action cannot be undone. Are you sure you want to continue?"
-          confirmText="Yes, Clear Everything"
-          cancelText="Cancel"
-          confirmButtonClass="btn-error"
-          onConfirm={() => {
-            setShowClearConfirm(false);
-            handleClearDatabase();
-          }}
-          onCancel={() => setShowClearConfirm(false)}
         />
       )}
 

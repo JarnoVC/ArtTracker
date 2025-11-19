@@ -833,6 +833,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
 
   // Get existing artwork IDs for this artist (to know when to stop)
   const existingArtworks = await db.getAllArtworks(userId, { artist_id: artistId });
+  const isInitialImport = existingArtworks.length === 0;
   const existingArtworkIds = new Set(existingArtworks.map(a => a.artwork_id));
 
   console.log(`🔍 Scraping updates for ${artist.username}...`);
@@ -1054,7 +1055,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
   console.log(`  ✓ ${newCount} new artworks added (checked ${currentPage} page(s))`);
 
   // Send Discord notifications if new artworks were found (only for update checks, not initial imports)
-  if (newCount > 0 && newArtworksForNotification.length > 0) {
+  if (!isInitialImport && newCount > 0 && newArtworksForNotification.length > 0) {
     try {
       await sendDiscordNotification(
         userId,
@@ -1066,6 +1067,8 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
       // Don't fail scraping if notification fails
       console.error(`  ⚠️  Failed to send Discord notification:`, error.message);
     }
+  } else if (isInitialImport && newCount > 0) {
+    console.log(`  ℹ️  Skipping Discord notifications for @${artist.username} initial import (${newCount} artworks).`);
   }
 
   return {
