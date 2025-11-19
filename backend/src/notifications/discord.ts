@@ -8,6 +8,7 @@ export interface ArtworkNotification {
   artworkUrl: string;
   thumbnailUrl?: string;
   uploadDate?: string;
+  changeType?: 'new' | 'updated';
 }
 
 /**
@@ -76,6 +77,8 @@ async function sendSingleArtworkNotification(
   const mention = user.discord_user_id ? `<@${user.discord_user_id}>` : '';
   const mentionText = mention ? `${mention} ` : '';
 
+  const changeLabel = artwork.changeType === 'updated' ? 'Updated' : 'New';
+
   // Format date if available
   const dateText = artwork.uploadDate 
     ? ` • ${new Date(artwork.uploadDate).toLocaleDateString()}`
@@ -84,7 +87,7 @@ async function sendSingleArtworkNotification(
   // Create Discord embed
   const embed = {
     title: artwork.title,
-    description: `New artwork by **${artistDisplayName}** (@${artistName})${dateText}`,
+    description: `${changeLabel} artwork by **${artistDisplayName}** (@${artistName})${dateText}`,
     url: artwork.artworkUrl,
     color: 0x6366f1, // Primary color (purple/indigo)
     thumbnail: artwork.thumbnailUrl ? {
@@ -102,7 +105,7 @@ async function sendSingleArtworkNotification(
 
   // Send webhook request
   await axios.post(webhookUrl, {
-    content: `${mentionText}🎨 **New Artwork Found!**`,
+    content: `${mentionText}🎨 **${changeLabel} Artwork!**`,
     embeds: [embed],
     username: 'ArtTracker'
   }, {
@@ -125,7 +128,7 @@ async function sendSummaryNotification(
   const mentionText = mention ? `${mention} ` : '';
 
   await axios.post(webhookUrl, {
-    content: `${mentionText}🎨 **${count} new artwork${count > 1 ? 's' : ''} found** from **${artistDisplayName}** (@${artistName})!`,
+    content: `${mentionText}🎨 **${count} new/updated artwork${count > 1 ? 's' : ''} found** from **${artistDisplayName}** (@${artistName})!`,
     username: 'ArtTracker'
   }, {
     timeout: 5000,

@@ -378,7 +378,7 @@ export async function addArtwork(
   thumbnail_url: string,
   artwork_url: string,
   upload_date?: string
-): Promise<{ artwork: Artwork; isNew: boolean }> {
+): Promise<{ artwork: Artwork; isNew: boolean; wasUpdated?: boolean }> {
   // Check if artwork already exists
   const existingResult = await query(
     'SELECT * FROM artworks WHERE user_id = $1 AND artist_id = $2 AND artwork_id = $3',
@@ -387,6 +387,45 @@ export async function addArtwork(
 
   if (existingResult.rows.length > 0) {
     const row = existingResult.rows[0];
+    const newUploadDate = upload_date ? new Date(upload_date) : null;
+    const titleChanged = row.title !== title;
+    const thumbChanged = row.thumbnail_url !== thumbnail_url;
+    const urlChanged = row.artwork_url !== artwork_url;
+    const uploadChanged =
+      (row.upload_date && newUploadDate && row.upload_date.getTime() !== newUploadDate.getTime()) ||
+      (!!row.upload_date !== !!newUploadDate);
+
+    if (titleChanged || thumbChanged || urlChanged || uploadChanged) {
+      const updateResult = await query(
+        `UPDATE artworks
+         SET title = $1,
+             thumbnail_url = $2,
+             artwork_url = $3,
+             upload_date = $4,
+             is_new = 1
+         WHERE id = $5
+         RETURNING *`,
+        [title, thumbnail_url, artwork_url, newUploadDate, row.id]
+      );
+      const updated = updateResult.rows[0];
+      return {
+        artwork: {
+          id: updated.id,
+          user_id: updated.user_id,
+          artist_id: updated.artist_id,
+          artwork_id: updated.artwork_id,
+          title: updated.title,
+          thumbnail_url: updated.thumbnail_url,
+          artwork_url: updated.artwork_url,
+          upload_date: updated.upload_date ? updated.upload_date.toISOString() : undefined,
+          is_new: updated.is_new,
+          discovered_at: updated.discovered_at.toISOString()
+        },
+        isNew: false,
+        wasUpdated: true
+      };
+    }
+
     return {
       artwork: {
         id: row.id,
@@ -400,7 +439,8 @@ export async function addArtwork(
         is_new: row.is_new,
         discovered_at: row.discovered_at.toISOString()
       },
-      isNew: false
+      isNew: false,
+      wasUpdated: false
     };
   }
 
@@ -424,7 +464,8 @@ export async function addArtwork(
       is_new: row.is_new,
       discovered_at: row.discovered_at.toISOString()
     },
-    isNew: true
+    isNew: true,
+    wasUpdated: false
   };
 }
 

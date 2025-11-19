@@ -1023,6 +1023,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
     artworkUrl: string;
     thumbnailUrl?: string;
     uploadDate?: string;
+    changeType?: 'new' | 'updated';
   }> = [];
 
   for (const artwork of artworks) {
@@ -1035,16 +1036,19 @@ export async function scrapeArtistUpdates(artistId: number, userId: number) {
       artwork.artwork_url,
       artwork.upload_date
     );
-    if (result.isNew) {
+    if (result.isNew || result.wasUpdated) {
+      if (result.wasUpdated) {
+        console.log(`    ↺ Updated artwork detected: ${artwork.title}`);
+      }
       newCount++;
-      // Collect data for Discord notification
       newArtworksForNotification.push({
         title: artwork.title,
         artistName: artist.username,
         artistDisplayName: artist.display_name || userInfo?.full_name,
         artworkUrl: artwork.artwork_url,
         thumbnailUrl: artwork.thumbnail_url,
-        uploadDate: artwork.upload_date
+        uploadDate: artwork.upload_date,
+        changeType: result.wasUpdated ? 'updated' : 'new'
       });
     }
   }

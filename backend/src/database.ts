@@ -158,7 +158,7 @@ export async function addArtwork(
   thumbnail_url: string,
   artwork_url: string,
   upload_date?: string
-): Promise<{ artwork: Artwork; isNew: boolean }> {
+): Promise<{ artwork: Artwork; isNew: boolean; wasUpdated?: boolean }> {
   if (usePostgres) {
     return pgDb.addArtwork(user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date);
   }

@@ -331,13 +331,29 @@ export function addArtwork(
   thumbnail_url: string,
   artwork_url: string,
   upload_date?: string
-): { artwork: Artwork; isNew: boolean } {
+): { artwork: Artwork; isNew: boolean; wasUpdated?: boolean } {
   const existing = db.artworks.find(
     a => a.user_id === user_id && a.artist_id === artist_id && a.artwork_id === artwork_id
   );
   
   if (existing) {
-    return { artwork: existing, isNew: false };
+    const changed =
+      existing.title !== title ||
+      existing.thumbnail_url !== thumbnail_url ||
+      existing.artwork_url !== artwork_url ||
+      existing.upload_date !== upload_date;
+
+    if (changed) {
+      existing.title = title;
+      existing.thumbnail_url = thumbnail_url;
+      existing.artwork_url = artwork_url;
+      existing.upload_date = upload_date;
+      existing.is_new = 1;
+      saveDatabase();
+      return { artwork: existing, isNew: false, wasUpdated: true };
+    }
+
+    return { artwork: existing, isNew: false, wasUpdated: false };
   }
 
   const artwork: Artwork = {
@@ -355,7 +371,7 @@ export function addArtwork(
 
   db.artworks.push(artwork);
   saveDatabase();
-  return { artwork, isNew: true };
+  return { artwork, isNew: true, wasUpdated: false };
 }
 
 export function markArtworkSeen(id: number, user_id: number): boolean {
