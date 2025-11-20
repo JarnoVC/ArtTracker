@@ -46,6 +46,22 @@ function Header({ onImportFollowing, onScrapeAll, isScraping, newCount, user, on
             id="header-actions-panel"
             className={`header-actions ${isMobileActionsOpen ? 'is-open' : ''}`}
           >
+            <button
+              className="btn btn-secondary"
+              onClick={onScrapeAll}
+              disabled={isScraping}
+            >
+              {isScraping ? '⏳ Scraping...' : '🔄 Check for Updates'}
+            </button>
+            
+            <button
+              className="btn btn-accent"
+              onClick={onImportFollowing}
+              title="Import all artists you follow on ArtStation"
+            >
+              📥 Import Following
+            </button>
+
             {user && (
               <>
                 <button
@@ -64,22 +80,6 @@ function Header({ onImportFollowing, onScrapeAll, isScraping, newCount, user, on
                 </button>
               </>
             )}
-            <button
-              className="btn btn-secondary"
-              onClick={onScrapeAll}
-              disabled={isScraping}
-            >
-              {isScraping ? '⏳ Scraping...' : '🔄 Check for Updates'}
-            </button>
-            
-            <button
-              className="btn btn-accent"
-              onClick={onImportFollowing}
-              title="Import all artists you follow on ArtStation"
-            >
-              📥 Import Following
-            </button>
-
           </div>
         </div>
       </div>
