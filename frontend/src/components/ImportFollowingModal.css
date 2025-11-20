@@ -166,7 +166,9 @@
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: var(--surface);
+  background-color: var(--secondary-light);
+  color: white;
+  transform: translateY(-1px);
 }
 
 .checkbox-label {
