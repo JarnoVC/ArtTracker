@@ -57,6 +57,81 @@ a:hover {
   color: var(--primary-dark);
 }
 
+.spinner {
+  --spinner-size: 24px;
+  --spinner-color-first: var(--success);
+  --spinner-color-second: var(--secondary);
+  width: calc(var(--spinner-size) * 3);
+  height: calc(var(--spinner-size) * 3);
+  position: relative;
+  display: inline-block;
+}
+
+.spinner::before,
+.spinner::after {
+  position: absolute;
+  content: '';
+  box-sizing: border-box;
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+  top: 50%;
+  left: 50%;
+  background: var(--spinner-color-first);
+  animation: spinner-up 2.4s cubic-bezier(0, 0, 0.24, 1.21) infinite;
+  border-radius: 6px;
+}
+
+.spinner::after {
+  background: var(--spinner-color-second);
+  top: calc(50% - var(--spinner-size));
+  left: calc(50% - var(--spinner-size));
+  animation: spinner-down 2.4s cubic-bezier(0, 0, 0.24, 1.21) infinite;
+}
+
+.spinner-small {
+  --spinner-size: 16px;
+}
+
+.spinner-large {
+  --spinner-size: 32px;
+}
+
+@keyframes spinner-down {
+  0%, 100% {
+    transform: none;
+  }
+
+  25% {
+    transform: translateX(100%);
+  }
+
+  50% {
+    transform: translateX(100%) translateY(100%);
+  }
+
+  75% {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes spinner-up {
+  0%, 100% {
+    transform: none;
+  }
+
+  25% {
+    transform: translateX(-100%);
+  }
+
+  50% {
+    transform: translateX(-100%) translateY(-100%);
+  }
+
+  75% {
+    transform: translateY(-100%);
+  }
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;

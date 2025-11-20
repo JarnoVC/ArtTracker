@@ -21,6 +21,21 @@
   min-height: 0;
 }
 
+.app-loading-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.app-loading-card {
+  text-align: center;
+}
+
+.app-loading-spinner {
+  margin-bottom: 16px;
+}
+
 @media (max-width: 768px) {
   .main-container {
     flex-direction: column;

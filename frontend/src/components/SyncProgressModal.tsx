@@ -19,7 +19,7 @@ function SyncProgressModal({ isComplete, onComplete }: SyncProgressModalProps) {
           {!isComplete ? (
             <div className="sync-loading">
               <div className="sync-spinner">
-                <div className="spinner-large">🔄</div>
+                <div className="spinner spinner-large" aria-hidden="true"></div>
               </div>
               <p>Fetching your following list from ArtStation...</p>
               <p className="sync-hint">This may take a moment</p>
@@ -42,7 +42,7 @@ function SyncProgressModal({ isComplete, onComplete }: SyncProgressModalProps) {
             </button>
           ) : (
             <div className="syncing-notice">
-              <span className="spinner">⏳</span>
+              <span className="spinner" aria-hidden="true"></span>
               Please wait...
             </div>
           )}

@@ -167,7 +167,7 @@ function SettingsModal({ onClose }: SettingsModalProps) {
               >
                 {isTesting ? (
                   <>
-                    <span className="spinner">⏳</span>
+                    <span className="spinner" aria-hidden="true"></span>
                     Testing...
                   </>
                 ) : (
@@ -236,7 +236,7 @@ function SettingsModal({ onClose }: SettingsModalProps) {
             >
               {isSaving ? (
                 <>
-                  <span className="spinner">⏳</span>
+                  <span className="spinner" aria-hidden="true"></span>
                   Saving...
                 </>
               ) : (

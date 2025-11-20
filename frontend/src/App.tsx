@@ -405,9 +405,9 @@ function App() {
   if (isCheckingAuth) {
     return (
       <div className="app">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div className="spinner" style={{ fontSize: '48px', marginBottom: '16px' }}>🔄</div>
+        <div className="app-loading-wrapper">
+          <div className="app-loading-card">
+            <div className="spinner spinner-large app-loading-spinner" aria-hidden="true"></div>
             <p>Loading...</p>
           </div>
         </div>

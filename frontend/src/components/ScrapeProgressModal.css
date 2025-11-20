@@ -88,8 +88,8 @@
   height: 8px;
   border-radius: 4px;
   background-color: var(--background);
-  appearance: none;
   -webkit-appearance: none;
+  appearance: none;
   overflow: hidden;
 }
 
@@ -222,16 +222,6 @@
   flex-shrink: 0;
 }
 
-.spinner-small {
-  display: inline-block;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .artist-progress-info {
   flex: 1;
   display: flex;
@@ -270,8 +260,7 @@
 }
 
 .scraping-notice .spinner {
-  display: inline-block;
-  animation: spin 2s linear infinite;
+  --spinner-size: 18px;
 }
 
 /* Mobile */

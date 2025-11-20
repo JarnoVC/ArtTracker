@@ -261,7 +261,7 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
                 >
                   {isLoading ? (
                     <>
-                      <span className="spinner">🔄</span>
+                      <span className="spinner" aria-hidden="true"></span>
                       {loadingPhase === 'fetching' ? 'Fetching...' : 
                        loadingPhase === 'processing' ? 'Processing...' : 
                        'Importing...'}

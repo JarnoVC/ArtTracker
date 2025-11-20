@@ -224,10 +224,10 @@ function ScrapeProgressModal({ artists, onComplete, isInitialImport = false }: S
                 <div className="artist-progress-icon">
                   {artist.status === 'pending' && '⏳'}
                   {artist.status === 'checking' && (
-                    <span className="spinner-small" title="Checking for updates">🔄</span>
+                    <span className="spinner spinner-small" title="Checking for updates" aria-hidden="true"></span>
                   )}
                   {artist.status === 'scraping' && (
-                    <span className="spinner-small" title="Scraping artworks">⏳</span>
+                    <span className="spinner spinner-small" title="Scraping artworks" aria-hidden="true"></span>
                   )}
                   {artist.status === 'completed' && '✓'}
                   {artist.status === 'skipped' && '⏭'}
@@ -272,7 +272,7 @@ function ScrapeProgressModal({ artists, onComplete, isInitialImport = false }: S
             </button>
           ) : (
             <div className="scraping-notice">
-              <span className="spinner">⏳</span>
+              <span className="spinner" aria-hidden="true"></span>
               Checking artists for updates...
             </div>
           )}

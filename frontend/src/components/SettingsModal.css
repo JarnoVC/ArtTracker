@@ -158,16 +158,6 @@
   background: var(--surface);
 }
 
-.spinner {
-  display: inline-block;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .settings-modal {

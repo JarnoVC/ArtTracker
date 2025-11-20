@@ -111,7 +111,7 @@ function LoginModal({ onLogin }: LoginModalProps) {
             >
               {isLoading ? (
                 <>
-                  <span className="spinner">⏳</span>
+                  <span className="spinner" aria-hidden="true"></span>
                   {isRegistering ? 'Creating...' : 'Logging in...'}
                 </>
               ) : (
