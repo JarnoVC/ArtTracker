@@ -1,7 +1,7 @@
 import express from 'express';
 import * as db from '../database';
 import { requireAuth } from '../middleware/auth';
-import { sendDiscordNotification } from '../notifications/discord';
+import { sendDiscordNotification, sendDiscordCustomMessage } from '../notifications/discord';
 
 const router = express.Router();
 
@@ -198,6 +198,39 @@ router.post('/test-discord', async (req, res) => {
     res.status(500).json({ 
       error: error.message || 'Failed to send test notification' 
     });
+  }
+});
+
+router.post('/custom-discord', async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (req.user.username !== 'Solana') {
+      return res.status(403).json({ error: 'Only Solana can send custom messages' });
+    }
+
+    const { message } = req.body;
+    if (typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    const trimmedMessage = message.trim().slice(0, 2000);
+    const user = await db.getUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (!user.discord_webhook_url) {
+      return res.status(400).json({ error: 'Discord webhook URL not configured.' });
+    }
+
+    await sendDiscordCustomMessage(user, trimmedMessage);
+
+    res.json({ success: true, message: 'Custom Discord message sent!' });
+  } catch (error: any) {
+    console.error('Error sending custom Discord message:', error);
+    res.status(500).json({ error: error.message || 'Failed to send custom Discord message' });
   }
 });
 

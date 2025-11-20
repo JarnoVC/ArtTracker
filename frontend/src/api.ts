@@ -188,6 +188,11 @@ export const testDiscordNotification = async (): Promise<{ success: boolean; mes
   return response.data;
 };
 
+export const sendCustomDiscordMessage = async (message: string): Promise<{ success: boolean; message: string }> => {
+  const response = await axios.post(`${API_BASE}/user/custom-discord`, { message });
+  return response.data;
+};
+
 export const logout = () => {
   setAuthToken(null);
 };

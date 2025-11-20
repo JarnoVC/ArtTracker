@@ -11,6 +11,13 @@ export interface ArtworkNotification {
   changeType?: 'new' | 'updated';
 }
 
+async function postToWebhook(webhookUrl: string, payload: any) {
+  await axios.post(webhookUrl, payload, {
+    timeout: 5000,
+    validateStatus: (status) => status < 500
+  });
+}
+
 /**
  * Send Discord notification for new artworks
  * Only sends notifications if user has discord_webhook_url configured
@@ -104,13 +111,10 @@ async function sendSingleArtworkNotification(
   };
 
   // Send webhook request
-  await axios.post(webhookUrl, {
+  await postToWebhook(webhookUrl, {
     content: `${mentionText}🎨 **${changeLabel} Artwork!**`,
     embeds: [embed],
     username: 'ArtTracker'
-  }, {
-    timeout: 5000,
-    validateStatus: (status) => status < 500 // Accept 2xx, 3xx, 4xx
   });
 }
 
@@ -127,12 +131,24 @@ async function sendSummaryNotification(
   const mention = user.discord_user_id ? `<@${user.discord_user_id}>` : '';
   const mentionText = mention ? `${mention} ` : '';
 
-  await axios.post(webhookUrl, {
+  await postToWebhook(webhookUrl, {
     content: `${mentionText}🎨 **${count} new/updated artwork${count > 1 ? 's' : ''} found** from **${artistDisplayName}** (@${artistName})!`,
     username: 'ArtTracker'
-  }, {
-    timeout: 5000,
-    validateStatus: (status) => status < 500
+  });
+}
+
+export async function sendDiscordCustomMessage(user: db.User, content: string): Promise<void> {
+  if (!user.discord_webhook_url) {
+    throw new Error('Discord webhook not configured');
+  }
+
+  const webhookUrl = user.discord_webhook_url;
+  const mention = user.discord_user_id ? `<@${user.discord_user_id}>` : '';
+  const mentionText = mention ? `${mention} ` : '';
+
+  await postToWebhook(webhookUrl, {
+    content: `${mentionText}${content}`,
+    username: 'ArtTracker'
   });
 }
 

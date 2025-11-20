@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getUserProfile, updateUserProfile, testDiscordNotification } from '../api';
+import { getUserProfile, updateUserProfile, testDiscordNotification, sendCustomDiscordMessage, User } from '../api';
 import { toast } from 'react-hot-toast';
 import './SettingsModal.css';
 
@@ -13,6 +13,9 @@ function SettingsModal({ onClose }: SettingsModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [customMessage, setCustomMessage] = useState('');
+  const [isSendingCustomMessage, setIsSendingCustomMessage] = useState(false);
 
   // Load current settings on mount
   useEffect(() => {
@@ -25,6 +28,7 @@ function SettingsModal({ onClose }: SettingsModalProps) {
       const profile = await getUserProfile();
       setDiscordWebhookUrl(profile.discord_webhook_url || '');
       setDiscordUserId(profile.discord_user_id || '');
+      setCurrentUser(profile);
     } catch (error: any) {
       toast.error('Failed to load settings');
       console.error('Error loading settings:', error);
@@ -80,6 +84,26 @@ function SettingsModal({ onClose }: SettingsModalProps) {
       setIsTesting(false);
     }
   };
+
+  const handleSendCustomMessage = async () => {
+    if (!customMessage.trim()) {
+      toast.error('Enter a message first');
+      return;
+    }
+    setIsSendingCustomMessage(true);
+    try {
+      await sendCustomDiscordMessage(customMessage.trim());
+      toast.success('Custom Discord message sent!');
+      setCustomMessage('');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to send custom message';
+      toast.error(errorMessage);
+    } finally {
+      setIsSendingCustomMessage(false);
+    }
+  };
+
+  const isSolana = currentUser?.username === 'Solana';
 
   return (
     <div className="modal-backdrop settings-backdrop" onClick={onClose}>
@@ -150,6 +174,41 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                   '🧪 Test Notification'
                 )}
               </button>
+
+              {isSolana && (
+                <div className="solana-fun-zone">
+                  <label htmlFor="custom-message" className="form-label">
+                    Custom Discord Message
+                  </label>
+                  <p className="form-hint">
+                    Send a one-off message straight to your Discord webhook. Only available for Solana.
+                  </p>
+                  <input
+                    id="custom-message"
+                    type="text"
+                    className="form-input"
+                    placeholder="Enter your masterpiece of chaos..."
+                    value={customMessage}
+                    onChange={(e) => setCustomMessage(e.target.value)}
+                    disabled={isLoading || isSaving || isTesting || isSendingCustomMessage}
+                    maxLength={2000}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-accent solana-send-btn"
+                    onClick={handleSendCustomMessage}
+                    disabled={
+                      isLoading ||
+                      isSaving ||
+                      isTesting ||
+                      isSendingCustomMessage ||
+                      !customMessage.trim()
+                    }
+                  >
+                    {isSendingCustomMessage ? 'Sending...' : 'Send Silly Message'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
