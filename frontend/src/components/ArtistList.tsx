@@ -17,6 +17,7 @@ interface ArtistListProps {
 function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted, onSyncWithArtStation, isLoading = false, isMobileOpen = false, onMobileClose }: ArtistListProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const handleDelete = async (e: React.MouseEvent, artistId: number) => {
     e.stopPropagation();
@@ -36,6 +37,17 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
       setDeletingId(null);
     }
   };
+
+  const normalizedQuery = searchTerm.trim().toLowerCase();
+  const filteredArtists = normalizedQuery
+    ? artists.filter((artist) => {
+        const usernameMatch = artist.username.toLowerCase().includes(normalizedQuery);
+        const displayNameMatch = artist.display_name
+          ? artist.display_name.toLowerCase().includes(normalizedQuery)
+          : false;
+        return usernameMatch || displayNameMatch;
+      })
+    : artists;
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -83,12 +95,31 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
         >
           📚 All Artists
         </button>
+        <div className="artist-search">
+          <input
+            type="text"
+            className="artist-search-input"
+            placeholder="Search artists..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              className="artist-search-clear"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="artists-scroll">
         {isLoading || isSyncing ? (
           <div className="empty-state">
-            <div style={{ fontSize: '32px', marginBottom: '1rem' }}>🔄</div>
+            <div className="loading-indicator">🔄</div>
             <p>Loading artists...</p>
             <p className="empty-hint">Please wait</p>
           </div>
@@ -97,8 +128,15 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
             <p>No artists yet</p>
             <p className="empty-hint">Click "Add Artist" to start tracking</p>
           </div>
+        ) : filteredArtists.length === 0 ? (
+          <div className="empty-state">
+            <p>No matching artists</p>
+            <p className="empty-hint">
+              {searchTerm ? `Try a different search term` : 'Click "Add Artist" to start tracking'}
+            </p>
+          </div>
         ) : (
-          artists.map((artist) => (
+          filteredArtists.map((artist) => (
             <div
               key={artist.id}
               className={`artist-card ${selectedArtistId === artist.id ? 'selected' : ''}`}
