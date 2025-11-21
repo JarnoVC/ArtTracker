@@ -101,7 +101,13 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
           className={`filter-btn ${selectedArtistId === null ? 'active' : ''}`}
           onClick={() => onSelectArtist(null)}
         >
-          📚 All Artists
+          <img 
+            src="/icons/All.svg" 
+            alt="" 
+            className="filter-btn-icon"
+            aria-hidden="true"
+          />
+          All Artists
         </button>
         <div className="artist-search">
           <input

@@ -81,6 +81,17 @@
   font-weight: 500;
   text-align: left;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-btn-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  flex-shrink: 0;
+  transition: filter 0.2s;
 }
 
 .filter-btn:hover {
@@ -90,6 +101,10 @@
 .filter-btn.active {
   background-color: var(--primary);
   color: white;
+}
+
+.filter-btn.active .filter-btn-icon {
+  filter: brightness(0) invert(1);
 }
 
 .artist-search {
