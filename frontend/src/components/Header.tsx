@@ -23,7 +23,14 @@ function Header({ onImportFollowing, onScrapeAll, isScraping, newCount, user, on
     <header className="header">
       <div className="header-content">
         <div className="header-left">
-          <h1 className="logo">🎨 ArtTracker</h1>
+          <h1 className="logo">
+            <img
+              src="/icons/Logo_nbg.png"
+              alt="ArtTracker logo"
+              className="logo-mark"
+            />
+            <span className="logo-text">ArtTracker</span>
+          </h1>
           {newCount > 0 && (
             <span className="new-badge">{newCount} new</span>
           )}
@@ -51,7 +58,7 @@ function Header({ onImportFollowing, onScrapeAll, isScraping, newCount, user, on
               onClick={onScrapeAll}
               disabled={isScraping}
             >
-              {isScraping ? '⏳ Scraping...' : '🔄 Check for Updates'}
+              {isScraping ? 'Scraping...' : 'Check for Updates'}
             </button>
             
             <button
@@ -59,7 +66,7 @@ function Header({ onImportFollowing, onScrapeAll, isScraping, newCount, user, on
               onClick={onImportFollowing}
               title="Import all artists you follow on ArtStation"
             >
-              📥 Import Following
+              Import Following
             </button>
 
             {user && (

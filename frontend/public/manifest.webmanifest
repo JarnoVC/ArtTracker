@@ -10,12 +10,12 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/icons/Favicon.png",
+      "src": "/icons/Favicon_nbg.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icons/Logo.png",
+      "src": "/icons/Logo_nbg.png",
       "sizes": "512x512",
       "type": "image/png"
     }

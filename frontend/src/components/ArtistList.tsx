@@ -74,7 +74,15 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
               disabled={isSyncing}
               title="Sync with ArtStation (re-import following list)"
             >
-              {isSyncing ? '⏳' : '🔄'}
+              {isSyncing ? (
+                <span className="spinner spinner-small" aria-hidden="true"></span>
+              ) : (
+                <img
+                  src="/icons/Refresh.svg"
+                  alt="Refresh following list"
+                  className="btn-icon-image"
+                />
+              )}
             </button>
             {onMobileClose && (
               <button 

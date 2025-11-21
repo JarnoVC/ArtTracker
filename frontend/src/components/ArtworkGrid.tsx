@@ -99,7 +99,7 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
             className={`btn ${showNewOnly ? 'btn-primary' : 'btn-secondary'}`}
             onClick={onToggleNewOnly}
           >
-            {showNewOnly ? '🔴 New Only' : '📋 Show All'}
+            {showNewOnly ? 'New Only' : 'Show All'}
           </button>
         </div>
       </div>
