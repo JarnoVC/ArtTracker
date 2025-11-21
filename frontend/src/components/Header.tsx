@@ -83,7 +83,13 @@ function Header({ onImportFollowing, onScrapeAll, isScraping, newCount, user, on
                   onClick={onLogout}
                   title="Logout"
                 >
-                  🚪 Logout
+                  <img 
+                    src="/icons/logout.svg" 
+                    alt="" 
+                    className="btn-icon-image"
+                    aria-hidden="true"
+                  />
+                  Logout
                 </button>
               </>
             )}
