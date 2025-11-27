@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Artist, Artwork, markArtworkSeen, markAllSeen } from '../api';
 import { toast } from 'react-hot-toast';
 import './ArtworkGrid.css';
@@ -17,6 +17,33 @@ interface ArtworkGridProps {
 function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, selectedArtist, onScrapeArtist, isLoading = false, onOpenMobileArtistList }: ArtworkGridProps) {
   const newCount = artworks.filter(a => a.is_new).length;
   const [isScraping, setIsScraping] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const target = gridRef.current;
+    if (!target) return;
+
+    const handleScroll = () => {
+      setShowBackToTop(target.scrollTop > 400);
+    };
+
+    target.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+
+    return () => {
+      target.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!gridRef.current) return;
+    gridRef.current.scrollTo({ top: 0 });
+  }, [selectedArtist?.id, showNewOnly]);
+
+  const scrollToTop = () => {
+    gridRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleMarkSeen = async (artworkId: number, e: React.MouseEvent) => {
     e.preventDefault();
@@ -54,7 +81,8 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
   };
 
   return (
-    <main className="artwork-grid-container">
+    <>
+      <main className="artwork-grid-container" ref={gridRef}>
       <div className="artwork-header">
         <div className="artwork-header-left">
           {onOpenMobileArtistList && (
@@ -193,7 +221,18 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
           ))}
         </div>
       )}
-    </main>
+      </main>
+      {showBackToTop && (
+        <button 
+          className="back-to-top" 
+          type="button" 
+          onClick={scrollToTop} 
+          aria-label="Back to top"
+        >
+          ↑
+        </button>
+      )}
+    </>
   );
 }
 
