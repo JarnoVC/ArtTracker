@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { initDatabase } from './database';
 import { initScheduler } from './scheduler';
 import authRoutes from './routes/auth';
+import publicRoutes from './routes/public';
 import artistRoutes from './routes/artists';
 import artworkRoutes from './routes/artworks';
 import scrapeRoutes from './routes/scrape';
@@ -57,6 +58,7 @@ app.get('/api/health', (_req, res) => {
 
 // Auth routes (no authentication required)
 app.use('/api/auth', authRoutes);
+app.use('/api/public', publicRoutes);
 
 // Protected routes (require authentication)
 app.use('/api/user', userRoutes);

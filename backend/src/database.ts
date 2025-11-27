@@ -40,6 +40,18 @@ export interface Artwork {
   discovered_at: string;
 }
 
+export interface PublicFeaturedArtwork {
+  id: number;
+  artist_id: number;
+  title: string;
+  thumbnail_url?: string;
+  artwork_url?: string;
+  upload_date?: string;
+  discovered_at: string;
+  username?: string;
+  display_name?: string;
+}
+
 const usePostgres = !!process.env.DATABASE_URL;
 
 export function initDatabase(): void {
@@ -213,4 +225,12 @@ export async function deleteAllArtists(user_id: number): Promise<number> {
     return pgDb.deleteAllArtists(user_id);
   }
   return toPromise(jsonDb.deleteAllArtists(user_id));
+}
+
+export async function getPublicFeaturedArtworks(limit: number = 10): Promise<PublicFeaturedArtwork[]> {
+  const normalizedLimit = Math.max(1, Math.min(limit, 24));
+  if (usePostgres) {
+    return pgDb.getPublicFeaturedArtworks(normalizedLimit);
+  }
+  return toPromise(jsonDb.getPublicFeaturedArtworks(normalizedLimit));
 }

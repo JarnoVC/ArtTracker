@@ -1,6 +1,7 @@
 import pg from 'pg';
 const { Pool } = pg;
 import crypto from 'crypto';
+import type { PublicFeaturedArtwork } from './database';
 
 // Export interfaces (same as database.ts)
 export interface User {
@@ -535,5 +536,59 @@ export async function deleteAllArtworks(user_id: number): Promise<number> {
 export async function deleteAllArtists(user_id: number): Promise<number> {
   const result = await query('DELETE FROM artists WHERE user_id = $1', [user_id]);
   return result.rowCount || 0;
+}
+
+export async function getPublicFeaturedArtworks(limit: number = 10): Promise<PublicFeaturedArtwork[]> {
+  const filteredQuery = `
+    SELECT 
+      a.id,
+      a.artist_id,
+      a.title,
+      a.thumbnail_url,
+      a.artwork_url,
+      a.upload_date,
+      a.discovered_at,
+      ar.display_name,
+      ar.username
+    FROM artworks a
+    INNER JOIN artists ar ON ar.id = a.artist_id
+    WHERE a.thumbnail_url IS NOT NULL AND a.thumbnail_url <> ''
+    ORDER BY RANDOM()
+    LIMIT $1
+  `;
+
+  const fallbackQuery = `
+    SELECT 
+      a.id,
+      a.artist_id,
+      a.title,
+      a.thumbnail_url,
+      a.artwork_url,
+      a.upload_date,
+      a.discovered_at,
+      ar.display_name,
+      ar.username
+    FROM artworks a
+    INNER JOIN artists ar ON ar.id = a.artist_id
+    ORDER BY RANDOM()
+    LIMIT $1
+  `;
+
+  let result = await query(filteredQuery, [limit]);
+  if (result.rows.length === 0) {
+    result = await query(fallbackQuery, [limit]);
+  }
+
+  return result.rows.map((row: any) => ({
+    id: row.id,
+    artist_id: row.artist_id,
+    title: row.title || 'Untitled',
+    thumbnail_url: row.thumbnail_url || undefined,
+    artwork_url: row.artwork_url || undefined,
+    upload_date: row.upload_date ? row.upload_date.toISOString() : undefined,
+    discovered_at: row.discovered_at ? row.discovered_at.toISOString() : new Date().toISOString(),
+    username: row.username || undefined,
+    display_name: row.display_name || undefined,
+  }));
 }
 

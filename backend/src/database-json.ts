@@ -3,6 +3,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import type { PublicFeaturedArtwork } from './database';
 
 const DB_PATH = process.env.DATABASE_PATH || './data/arttracker.json';
 
@@ -439,5 +440,30 @@ export function deleteAllArtists(user_id: number): number {
     saveDatabase();
   }
   return count;
+}
+
+export function getPublicFeaturedArtworks(limit: number = 10): PublicFeaturedArtwork[] {
+  if (db.artworks.length === 0) {
+    return [];
+  }
+
+  const candidates = db.artworks.filter(a => a.thumbnail_url && a.thumbnail_url.trim().length > 0);
+  const pool = candidates.length ? candidates : db.artworks;
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+
+  return shuffled.slice(0, limit).map(artwork => {
+    const artist = db.artists.find(a => a.id === artwork.artist_id);
+    return {
+      id: artwork.id,
+      artist_id: artwork.artist_id,
+      title: artwork.title || 'Untitled',
+      thumbnail_url: artwork.thumbnail_url,
+      artwork_url: artwork.artwork_url,
+      upload_date: artwork.upload_date,
+      discovered_at: artwork.discovered_at,
+      username: artist?.username,
+      display_name: artist?.display_name,
+    };
+  });
 }
 

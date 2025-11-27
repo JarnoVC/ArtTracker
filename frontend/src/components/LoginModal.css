@@ -12,17 +12,235 @@
 }
 
 .login-modal {
-  background: var(--surface);
-  border-radius: 12px;
+  background: transparent;
+  border-radius: 24px;
   padding: 0;
-  max-width: 400px;
-  width: 90%;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  max-width: min(960px, 94vw);
+  width: 100%;
+  box-shadow: 0 25px 70px rgba(5, 8, 25, 0.55);
+  overflow: hidden;
+}
+
+.login-shell {
+  display: flex;
+  border-radius: inherit;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.85), rgba(17, 24, 39, 0.4)), var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
+}
+
+.login-showcase {
+  flex: 1.15;
+  position: relative;
+  min-height: 520px;
+  padding: 36px 32px 32px;
+  color: #f8fafc;
+  background: radial-gradient(circle at 20% 20%, rgba(180, 230, 255, 0.12), transparent 55%),
+    radial-gradient(circle at 80% 0%, rgba(255, 192, 255, 0.25), transparent 50%),
+    rgba(7, 10, 20, 0.92);
+  overflow: hidden;
+}
+
+.login-showcase::before,
+.login-showcase::after {
+  content: '';
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(115, 88, 248, 0.4), transparent 65%);
+  filter: blur(40px);
+  opacity: 0.7;
+}
+
+.login-showcase::before {
+  top: -120px;
+  right: -160px;
+}
+
+.login-showcase::after {
+  bottom: -180px;
+  left: -120px;
+  background: radial-gradient(circle, rgba(16, 214, 255, 0.35), transparent 70%);
+}
+
+.login-showcase__copy {
+  position: relative;
+  z-index: 1;
+  max-width: 320px;
+}
+
+.login-showcase__copy .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-size: 12px;
+  color: rgba(248, 250, 252, 0.75);
+  margin: 0 0 12px;
+}
+
+.login-showcase__copy h3 {
+  margin: 0 0 12px;
+  font-size: clamp(24px, 3vw, 32px);
+  line-height: 1.15;
+}
+
+.login-showcase__copy p {
+  margin: 0;
+  color: rgba(248, 250, 252, 0.75);
+  font-size: 14px;
+}
+
+.login-showcase__carousel {
+  position: relative;
+  margin-top: 32px;
+  width: 100%;
+  height: clamp(280px, 40vw, 420px);
+  z-index: 1;
+  transform: translate(-6%, -8%);
+}
+
+.login-carousel {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  perspective: 1400px;
+  transform: translate(-4%, -6%);
+}
+
+.orbit-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(200px, 30vw, 260px);
+  aspect-ratio: 3 / 4;
+  transform-origin: center;
+  border-radius: 20px;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(9, 11, 19, 0.4), rgba(9, 11, 19, 0.75));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), 0 0 50px var(--card-accent, rgba(130, 202, 255, 0.25));
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  color: #fff;
+  opacity: 0;
+  --shift-x: calc(var(--card-shift, 0) * -18px);
+  --shift-y: calc(var(--card-shift, 0) * 10px);
+  transform: translate3d(calc(-58% + var(--shift-x)), calc(-35% + var(--shift-y)), 0) scale(0.78);
+  overflow: hidden;
+  transition:
+    opacity 1.2s ease,
+    transform 1.2s ease,
+    filter 1.2s ease;
+  filter: blur(8px);
+}
+
+.orbit-card[data-active="true"] {
+  opacity: 1;
+  transform: translate3d(-44%, -48%, 0) scale(1);
+  filter: blur(0);
+  z-index: 2;
+}
+
+.orbit-card[data-active="false"] {
+  opacity: 0;
+  z-index: 1;
+}
+
+.orbit-card__glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.5), transparent 60%);
+  opacity: 0.3;
+  mix-blend-mode: screen;
+}
+
+.orbit-card__media {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orbit-card[data-has-image="true"] .orbit-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 12s ease;
+}
+
+.orbit-card[data-has-image="true"] .orbit-card__media img:hover {
+  transform: scale(1.15);
+}
+
+.orbit-card[data-has-image="false"] .orbit-card__media {
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.2), rgba(10, 12, 22, 0.5)),
+    linear-gradient(30deg, var(--card-accent, rgba(130, 202, 255, 0.45)), transparent);
+  background-blend-mode: screen;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.35);
+}
+
+.orbit-card__placeholder {
+  font-size: 42px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.orbit-card__meta {
+  position: relative;
+  z-index: 2;
+}
+
+.orbit-card__artist {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.orbit-card__title {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* No keyframes needed; transition handles fade/scale cycle */
+
+.login-panel {
+  flex: 1;
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
 }
 
 .login-modal .modal-header {
-  padding: 24px 24px 16px;
+  padding: 28px 32px 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.login-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-logo {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
 }
 
 .login-modal .modal-header h2 {
@@ -32,7 +250,17 @@
 }
 
 .login-modal .modal-body {
-  padding: 24px;
+  padding: 24px 32px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.login-form .modal-body {
+  flex: 1;
 }
 
 .login-description {
@@ -79,9 +307,90 @@
 }
 
 .login-modal .modal-footer {
-  padding: 16px 24px 24px;
+  padding: 16px 32px 32px;
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.login-modal .modal-footer .btn {
+  flex: 1;
+  min-width: 140px;
+  white-space: normal;
+  text-align: center;
+  justify-content: center;
+  line-height: 1.3;
+}
+
+.btn-primary {
+  transition: box-shadow 0.3s ease;
+}
+
+.btn-primary:focus-visible {
+  box-shadow: 0 0 0 3px rgba(130, 202, 255, 0.35);
+}
+
+@media (max-width: 960px) {
+  .login-showcase {
+    min-height: 480px;
+  }
+}
+
+@media (max-width: 768px) {
+  .login-shell {
+    flex-direction: column;
+  }
+
+  .login-showcase {
+    order: 1;
+    min-height: 300px;
+    padding: 28px 20px 36px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .login-panel {
+    order: 2;
+  }
+
+  .login-showcase__carousel {
+    margin-top: 20px;
+    height: clamp(220px, 55vw, 320px);
+    transform: none;
+  }
+
+  .login-carousel {
+    transform: none;
+  }
+
+  .orbit-card {
+    width: min(55vw, 200px);
+    --shift-x: 0px;
+    --shift-y: 0px;
+    transform: translate3d(-50%, -28%, 0) scale(0.78);
+  }
+
+  .orbit-card[data-active="true"] {
+    transform: translate3d(-50%, -48%, 0) scale(0.92);
+  }
+
+  .login-modal .modal-footer {
+    flex-direction: column;
+  }
+
+  .login-modal .modal-footer .btn {
+    width: 100%;
+  }
+
+  .login-modal .modal-header {
+    padding: 24px 20px 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-card {
+    animation: none;
+    opacity: 1;
+  }
 }
 

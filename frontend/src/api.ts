@@ -64,6 +64,18 @@ export interface Artwork {
   display_name?: string;
 }
 
+export interface FeaturedArtworkPreview {
+  id: number;
+  artist_id: number;
+  title: string;
+  thumbnail_url?: string;
+  artwork_url?: string;
+  upload_date?: string;
+  discovered_at?: string;
+  username?: string;
+  display_name?: string;
+}
+
 export const getArtists = async (): Promise<Artist[]> => {
   const response = await axios.get(`${API_BASE}/artists`);
   return response.data;
@@ -89,6 +101,13 @@ export const getArtworks = async (
   if (latestPerArtist) params.append('latest_per_artist', 'true');
   
   const response = await axios.get(`${API_BASE}/artworks?${params}`);
+  return response.data;
+};
+
+export const getFeaturedArtworks = async (limit: number = 10): Promise<FeaturedArtworkPreview[]> => {
+  const response = await axios.get(`${API_BASE}/public/featured-artworks`, {
+    params: { limit },
+  });
   return response.data;
 };
 
