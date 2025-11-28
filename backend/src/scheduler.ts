@@ -21,7 +21,17 @@ interface ScheduledTaskResult {
  * Sync all users' ArtStation following lists
  * Runs daily to check for new artists they're following
  */
+let isSyncRunning = false;
+let isArtworkCheckRunning = false;
+let isRescanRunning = false;
+
 async function syncAllUsersFollowing(): Promise<ScheduledTaskResult[]> {
+  if (isSyncRunning) {
+    console.log('⏳ [Scheduler] Sync already running, skipping concurrent invocation');
+    return [];
+  }
+  isSyncRunning = true;
+
   console.log('🔄 [Scheduler] Starting daily sync for all users...');
   const users = await db.getAllUsers();
   const results: ScheduledTaskResult[] = [];
@@ -68,6 +78,7 @@ async function syncAllUsersFollowing(): Promise<ScheduledTaskResult[]> {
   }
 
   console.log(`✅ [Scheduler] Daily sync complete. Processed ${results.length} users.`);
+  isSyncRunning = false;
   return results;
 }
 
@@ -76,6 +87,12 @@ async function syncAllUsersFollowing(): Promise<ScheduledTaskResult[]> {
  * Runs every 6 hours (configurable)
  */
 async function checkAllUsersArtworks(): Promise<ScheduledTaskResult[]> {
+  if (isArtworkCheckRunning) {
+    console.log('⏳ [Scheduler] Artwork check already running, skipping concurrent invocation');
+    return [];
+  }
+  isArtworkCheckRunning = true;
+
   console.log('🔍 [Scheduler] Starting artwork check for all users...');
   const users = await db.getAllUsers();
   const results: ScheduledTaskResult[] = [];
@@ -123,6 +140,7 @@ async function checkAllUsersArtworks(): Promise<ScheduledTaskResult[]> {
   }
 
   console.log(`✅ [Scheduler] Artwork check complete. Processed ${results.length} users.`);
+  isArtworkCheckRunning = false;
   return results;
 }
 
@@ -130,6 +148,12 @@ async function checkAllUsersArtworks(): Promise<ScheduledTaskResult[]> {
  * Run a full rescan to detect edited artworks (weekly)
  */
 async function rescanAllUsersArtworks(): Promise<ScheduledTaskResult[]> {
+  if (isRescanRunning) {
+    console.log('⏳ [Scheduler] Weekly rescan already running, skipping concurrent invocation');
+    return [];
+  }
+  isRescanRunning = true;
+
   console.log('🧹 [Scheduler] Starting weekly full rescan for edits...');
   const users = await db.getAllUsers();
   const results: ScheduledTaskResult[] = [];
@@ -168,6 +192,7 @@ async function rescanAllUsersArtworks(): Promise<ScheduledTaskResult[]> {
   }
 
   console.log(`✅ [Scheduler] Weekly rescan complete. Processed ${results.length} users.`);
+  isRescanRunning = false;
   return results;
 }
 
