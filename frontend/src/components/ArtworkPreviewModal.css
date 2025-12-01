@@ -87,18 +87,16 @@
   overflow: hidden;
   flex-shrink: 0;
   width: 100%;
-  max-height: 60vh;
-  min-height: 200px;
+  /* No max-height constraint - let image display at full size since modal is scrollable */
 }
 
 .artwork-preview-image {
   max-width: 100%;
-  max-height: 60vh;
   width: auto;
   height: auto;
   object-fit: contain;
   display: block;
-  /* Preserve aspect ratio - image determines its own size */
+  /* Preserve aspect ratio - image displays at its natural size */
 }
 
 .artwork-preview-placeholder {
@@ -241,14 +239,6 @@
     padding: 0;
   }
 
-  .artwork-preview-image-container {
-    max-height: 60vh;
-    min-height: 250px;
-  }
-
-  .artwork-preview-image {
-    max-height: 60vh;
-  }
 
   .artwork-preview-info {
     padding: 20px;
