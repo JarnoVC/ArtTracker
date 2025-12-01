@@ -41,6 +41,7 @@ export interface Artwork {
   artwork_id: string;
   title: string;
   thumbnail_url: string;
+  high_quality_image_url?: string;
   artwork_url: string;
   upload_date?: string;
   last_updated_at?: string;
@@ -339,6 +340,7 @@ export function addArtwork(
   artwork_url: string,
   upload_date?: string,
   updated_at?: string,
+  high_quality_image_url?: string,
   options: AddArtworkOptions = {}
 ): { artwork: Artwork | null; isNew: boolean; wasUpdated?: boolean; skipped?: boolean } {
   const { allowInsert = true, markUpdatesAsNew = true } = options;
@@ -350,6 +352,7 @@ export function addArtwork(
     const changed =
       existing.title !== title ||
       existing.thumbnail_url !== thumbnail_url ||
+      (existing.high_quality_image_url || null) !== (high_quality_image_url || null) ||
       existing.artwork_url !== artwork_url ||
       existing.upload_date !== upload_date ||
       existing.last_updated_at !== updated_at;
@@ -357,6 +360,7 @@ export function addArtwork(
     if (changed) {
       existing.title = title;
       existing.thumbnail_url = thumbnail_url;
+      existing.high_quality_image_url = high_quality_image_url;
       existing.artwork_url = artwork_url;
       existing.upload_date = upload_date;
       existing.last_updated_at = updated_at || upload_date || existing.last_updated_at;
@@ -381,6 +385,7 @@ export function addArtwork(
     artwork_id,
     title,
     thumbnail_url,
+    high_quality_image_url,
     artwork_url,
     upload_date,
     last_updated_at: updated_at || upload_date || new Date().toISOString(),

@@ -32,6 +32,7 @@ export interface Artwork {
   artwork_id: string;
   title: string;
   thumbnail_url: string;
+  high_quality_image_url?: string;
   artwork_url: string;
   upload_date?: string;
   last_updated_at?: string;
@@ -340,6 +341,7 @@ export async function getAllArtworks(user_id: number, filters?: { artist_id?: nu
     artwork_id: row.artwork_id,
     title: row.title,
     thumbnail_url: row.thumbnail_url,
+    high_quality_image_url: row.high_quality_image_url || undefined,
     artwork_url: row.artwork_url,
     upload_date: row.upload_date ? row.upload_date.toISOString() : undefined,
     last_updated_at: row.last_updated_at ? row.last_updated_at.toISOString() : undefined,
@@ -387,6 +389,7 @@ export async function addArtwork(
   artwork_url: string,
   upload_date?: string,
   updated_at?: string,
+  high_quality_image_url?: string,
   options: AddArtworkOptions = {}
 ): Promise<{ artwork: Artwork | null; isNew: boolean; wasUpdated?: boolean; skipped?: boolean }> {
   const { allowInsert = true, markUpdatesAsNew = true } = options;
@@ -401,6 +404,7 @@ export async function addArtwork(
     const newUploadDate = upload_date ? new Date(upload_date) : null;
     const titleChanged = row.title !== title;
     const thumbChanged = row.thumbnail_url !== thumbnail_url;
+    const highQualityChanged = (row.high_quality_image_url || null) !== (high_quality_image_url || null);
     const urlChanged = row.artwork_url !== artwork_url;
     const uploadChanged =
       (row.upload_date && newUploadDate && row.upload_date.getTime() !== newUploadDate.getTime()) ||
@@ -409,18 +413,19 @@ export async function addArtwork(
     const newUpdatedAt = updated_at ? new Date(updated_at).getTime() : null;
     const updatedAtChanged = existingUpdatedAt !== newUpdatedAt;
 
-    if (titleChanged || thumbChanged || urlChanged || uploadChanged || updatedAtChanged) {
+    if (titleChanged || thumbChanged || highQualityChanged || urlChanged || uploadChanged || updatedAtChanged) {
       const updateResult = await query(
         `UPDATE artworks
          SET title = $1,
              thumbnail_url = $2,
-             artwork_url = $3,
-             upload_date = $4,
-             last_updated_at = $5,
-             is_new = CASE WHEN $6 THEN 1 ELSE is_new END
-         WHERE id = $7
+             high_quality_image_url = $3,
+             artwork_url = $4,
+             upload_date = $5,
+             last_updated_at = $6,
+             is_new = CASE WHEN $7 THEN 1 ELSE is_new END
+         WHERE id = $8
          RETURNING *`,
-        [title, thumbnail_url, artwork_url, newUploadDate, updated_at ? new Date(updated_at) : row.last_updated_at, markUpdatesAsNew, row.id]
+        [title, thumbnail_url, high_quality_image_url || null, artwork_url, newUploadDate, updated_at ? new Date(updated_at) : row.last_updated_at, markUpdatesAsNew, row.id]
       );
       const updated = updateResult.rows[0];
       return {
@@ -431,6 +436,7 @@ export async function addArtwork(
           artwork_id: updated.artwork_id,
           title: updated.title,
           thumbnail_url: updated.thumbnail_url,
+          high_quality_image_url: updated.high_quality_image_url || undefined,
           artwork_url: updated.artwork_url,
           upload_date: updated.upload_date ? updated.upload_date.toISOString() : undefined,
           last_updated_at: updated.last_updated_at ? updated.last_updated_at.toISOString() : undefined,
@@ -450,9 +456,10 @@ export async function addArtwork(
         artwork_id: row.artwork_id,
         title: row.title,
         thumbnail_url: row.thumbnail_url,
+        high_quality_image_url: row.high_quality_image_url || undefined,
         artwork_url: row.artwork_url,
-      upload_date: row.upload_date ? row.upload_date.toISOString() : undefined,
-      last_updated_at: row.last_updated_at ? row.last_updated_at.toISOString() : undefined,
+        upload_date: row.upload_date ? row.upload_date.toISOString() : undefined,
+        last_updated_at: row.last_updated_at ? row.last_updated_at.toISOString() : undefined,
         is_new: row.is_new,
         discovered_at: row.discovered_at.toISOString()
       },
@@ -471,14 +478,15 @@ export async function addArtwork(
   }
 
   const result = await query(
-    `INSERT INTO artworks (user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date, last_updated_at, is_new)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1) RETURNING *`,
+    `INSERT INTO artworks (user_id, artist_id, artwork_id, title, thumbnail_url, high_quality_image_url, artwork_url, upload_date, last_updated_at, is_new)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1) RETURNING *`,
     [
       user_id,
       artist_id,
       artwork_id,
       title,
       thumbnail_url,
+      high_quality_image_url || null,
       artwork_url,
       upload_date ? new Date(upload_date) : null,
       updated_at ? new Date(updated_at) : upload_date ? new Date(upload_date) : new Date()
@@ -494,6 +502,7 @@ export async function addArtwork(
       artwork_id: row.artwork_id,
       title: row.title,
       thumbnail_url: row.thumbnail_url,
+      high_quality_image_url: row.high_quality_image_url || undefined,
       artwork_url: row.artwork_url,
       upload_date: row.upload_date ? row.upload_date.toISOString() : undefined,
       last_updated_at: row.last_updated_at ? row.last_updated_at.toISOString() : undefined,

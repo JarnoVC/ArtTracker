@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 import * as db from './database';
 import { sendDiscordNotification } from './notifications/discord';
+import { convertToHighQualityUrl } from './utils/imageUrlConverter';
 
 const SCRAPE_DELAY = parseInt(process.env.SCRAPE_DELAY_MS || '2000');
 const CONCURRENT_ARTIST_LIMIT = 1; // Sequential processing for Render free tier stability
@@ -13,6 +14,7 @@ interface ScrapedArtwork {
   artwork_id: string;
   title: string;
   thumbnail_url: string;
+  high_quality_image_url?: string;
   artwork_url: string;
   upload_date?: string;
   updated_at?: string;
@@ -398,13 +400,16 @@ export async function scrapeArtist(artistId: number, userId: number) {
           jsonData.data.forEach((project: any) => {
             if (!project.hash_id) return;
 
+          const thumbnailUrl = project.cover?.thumb_url || 
+                          project.cover?.small_square_url || 
+                          project.cover?.url || 
+                          project.smaller_square_cover_url || '';
+          
           const artwork: ScrapedArtwork = {
             artwork_id: project.hash_id,
             title: project.title || 'Untitled',
-            thumbnail_url: project.cover?.thumb_url || 
-                          project.cover?.small_square_url || 
-                          project.cover?.url || 
-                          project.smaller_square_cover_url || '',
+            thumbnail_url: thumbnailUrl,
+            high_quality_image_url: thumbnailUrl ? convertToHighQualityUrl(thumbnailUrl) : undefined,
             artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
             upload_date: project.published_at || project.created_at,
             updated_at: project.updated_at || project.published_at || project.created_at
@@ -473,8 +478,9 @@ export async function scrapeArtist(artistId: number, userId: number) {
         artwork.title,
         artwork.thumbnail_url,
         artwork.artwork_url,
-      artwork.upload_date,
-      artwork.updated_at
+        artwork.upload_date,
+        artwork.updated_at,
+        artwork.high_quality_image_url
       );
       if (result.isNew) {
         newCount++;
@@ -621,6 +627,9 @@ async function scrapeFromProfilePage(artistId: number, userId: number, artist: a
                 artwork_id: project.hash_id || project.id?.toString() || '',
                 title: project.title || 'Untitled',
                 thumbnail_url: project.cover?.thumb_url || project.cover?.small_square_url || project.cover?.url || '',
+                high_quality_image_url: (project.cover?.thumb_url || project.cover?.small_square_url || project.cover?.url || '') 
+                  ? convertToHighQualityUrl(project.cover?.thumb_url || project.cover?.small_square_url || project.cover?.url || '') 
+                  : undefined,
                 artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
                 upload_date: project.published_at || project.created_at,
                 updated_at: project.updated_at || project.published_at || project.created_at
@@ -655,7 +664,8 @@ async function scrapeFromProfilePage(artistId: number, userId: number, artist: a
         artwork.thumbnail_url,
         artwork.artwork_url,
         artwork.upload_date,
-        artwork.updated_at
+        artwork.updated_at,
+        artwork.high_quality_image_url
       );
       if (result.isNew) {
         newCount++;
@@ -1003,6 +1013,15 @@ export async function scrapeArtistUpdates(artistId: number, userId: number, opti
                         project.cover?.small_square_url || 
                         project.cover?.url || 
                         project.smaller_square_cover_url || '',
+          high_quality_image_url: (project.cover?.thumb_url || 
+                        project.cover?.small_square_url || 
+                        project.cover?.url || 
+                        project.smaller_square_cover_url || '') 
+            ? convertToHighQualityUrl(project.cover?.thumb_url || 
+                        project.cover?.small_square_url || 
+                        project.cover?.url || 
+                        project.smaller_square_cover_url || '') 
+            : undefined,
           artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
           upload_date: project.published_at || project.created_at,
           alreadyExists
@@ -1068,6 +1087,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number, opti
       artwork.artwork_url,
       artwork.upload_date,
       artwork.updated_at,
+      artwork.high_quality_image_url,
       {
         allowInsert: artwork.alreadyExists ? true : allowInsert,
         markUpdatesAsNew: artwork.alreadyExists ? markUpdatesAsNew : true

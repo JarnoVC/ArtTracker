@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Artist, Artwork, markArtworkSeen, markAllSeen } from '../api';
 import { toast } from 'react-hot-toast';
+import ArtworkPreviewModal from './ArtworkPreviewModal';
 import './ArtworkGrid.css';
 
 interface ArtworkGridProps {
@@ -18,6 +19,7 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
   const newCount = artworks.filter(a => a.is_new).length;
   const [isScraping, setIsScraping] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [previewArtwork, setPreviewArtwork] = useState<Artwork | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -52,6 +54,33 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
     try {
       await markArtworkSeen(artworkId);
       onArtworkSeen();
+      // Update preview artwork if it's currently open
+      if (previewArtwork?.id === artworkId) {
+        setPreviewArtwork({ ...previewArtwork, is_new: 0 });
+      }
+    } catch (error) {
+      toast.error('Failed to mark as seen');
+    }
+  };
+
+  const handlePreviewClick = (artwork: Artwork, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPreviewArtwork(artwork);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewArtwork(null);
+  };
+
+  const handlePreviewMarkSeen = async (artworkId: number) => {
+    try {
+      await markArtworkSeen(artworkId);
+      onArtworkSeen();
+      if (previewArtwork?.id === artworkId) {
+        setPreviewArtwork({ ...previewArtwork, is_new: 0 });
+      }
+      toast.success('Marked as seen');
     } catch (error) {
       toast.error('Failed to mark as seen');
     }
@@ -178,6 +207,15 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
               rel="noopener noreferrer"
               className="artwork-card"
             >
+              <button
+                className="artwork-preview-btn"
+                onClick={(e) => handlePreviewClick(artwork, e)}
+                title="Preview artwork"
+                aria-label="Preview artwork"
+              >
+                <img src="/icons/enlarge.svg" alt="Preview" className="enlarge-icon" />
+              </button>
+
               {artwork.is_new === 1 && (
                 <div className="new-indicator">
                   <span className="new-label">NEW</span>
@@ -231,6 +269,14 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
         >
           ↑
         </button>
+      )}
+
+      {previewArtwork && (
+        <ArtworkPreviewModal
+          artwork={previewArtwork}
+          onClose={handleClosePreview}
+          onMarkSeen={handlePreviewMarkSeen}
+        />
       )}
     </>
   );

@@ -10,6 +10,7 @@ import LoginModal from './components/LoginModal';
 import SettingsModal from './components/SettingsModal';
 import { Artist, Artwork, getArtists, getArtworks, getNewCount, importFollowing, scrapeArtist, getCurrentUser, logout, getAuthToken, User } from './api';
 import { loadCachedData, saveCachedData, clearCachedData } from './offlineCache.ts';
+import { deduplicateRequest } from './utils/requestDeduplication';
 import './App.css';
 
 function App() {
@@ -97,7 +98,9 @@ function App() {
     }
 
     try {
-      const currentUser = await getCurrentUser();
+      const currentUser = await deduplicateRequest('checkAuth', async () => {
+        return await getCurrentUser();
+      });
       setUser(currentUser);
       setIsAuthenticated(true);
       saveCachedData({ user: currentUser });
@@ -164,7 +167,9 @@ function App() {
     }
 
     try {
-      const data = await getArtists();
+      const data = await deduplicateRequest('loadArtists', async () => {
+        return await getArtists();
+      });
       setArtists(data);
       saveCachedData({ artists: data });
     } catch (error) {
@@ -197,7 +202,10 @@ function App() {
     try {
       // Show only latest per artist when viewing "All Artists"
       const latestPerArtist = selectedArtistId === null;
-      const data = await getArtworks(selectedArtistId, showNewOnly, latestPerArtist);
+      const requestKey = `loadArtworks:${selectedArtistId ?? 'all'}:${showNewOnly}:${latestPerArtist}`;
+      const data = await deduplicateRequest(requestKey, async () => {
+        return await getArtworks(selectedArtistId, showNewOnly, latestPerArtist);
+      });
       setArtworks(data);
       saveCachedData({ artworks: data, selectedArtistId });
     } catch (error) {
@@ -218,7 +226,9 @@ function App() {
       return;
     }
     try {
-      const data = await getNewCount();
+      const data = await deduplicateRequest('loadNewCount', async () => {
+        return await getNewCount();
+      });
       setNewCount(data.count);
       saveCachedData({ newCount: data.count });
     } catch (error) {
@@ -278,7 +288,9 @@ function App() {
       }
 
       toast.loading('Loading artworks...', { id: 'scrape-single' });
-      const result = await scrapeArtist(artistId);
+      const result = await deduplicateRequest(`scrapeArtist:${artistId}`, async () => {
+        return await scrapeArtist(artistId);
+      });
       
       toast.dismiss('scrape-single');
       

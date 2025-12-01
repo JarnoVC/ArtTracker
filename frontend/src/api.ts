@@ -55,6 +55,7 @@ export interface Artwork {
   artwork_id: string;
   title: string;
   thumbnail_url: string;
+  high_quality_image_url?: string;
   artwork_url: string;
   upload_date?: string;
   last_updated_at?: string;

@@ -33,6 +33,7 @@ export interface Artwork {
   artwork_id: string;
   title: string;
   thumbnail_url: string;
+  high_quality_image_url?: string;
   artwork_url: string;
   upload_date?: string;
   last_updated_at?: string;
@@ -184,12 +185,13 @@ export async function addArtwork(
   artwork_url: string,
   upload_date?: string,
   updated_at?: string,
+  high_quality_image_url?: string,
   options?: AddArtworkOptions
 ): Promise<AddArtworkResult> {
   if (usePostgres) {
-    return pgDb.addArtwork(user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date, updated_at, options);
+    return pgDb.addArtwork(user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date, updated_at, high_quality_image_url, options);
   }
-  return toPromise(jsonDb.addArtwork(user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date, updated_at, options));
+  return toPromise(jsonDb.addArtwork(user_id, artist_id, artwork_id, title, thumbnail_url, artwork_url, upload_date, updated_at, high_quality_image_url, options));
 }
 
 export async function markArtworkSeen(id: number, user_id: number): Promise<boolean> {
