@@ -144,11 +144,6 @@ export const importFollowing = async (username: string = '', clearExisting: bool
   return response.data;
 };
 
-export const clearDatabase = async (): Promise<any> => {
-  const response = await axios.post(`${API_BASE}/database/clear`);
-  return response.data;
-};
-
 // Auth API
 export interface User {
   id: number;
