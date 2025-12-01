@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Artist, deleteArtist } from '../api';
 import { toast } from 'react-hot-toast';
+import ConfirmModal from './ConfirmModal';
 import './ArtistList.css';
 
 interface ArtistListProps {
@@ -16,16 +17,11 @@ interface ArtistListProps {
 
 function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted, onSyncWithArtStation, isLoading = false, isMobileOpen = false, onMobileClose }: ArtistListProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const handleDelete = async (e: React.MouseEvent, artistId: number) => {
-    e.stopPropagation();
-    
-    if (!confirm('Are you sure you want to unfollow this artist?')) {
-      return;
-    }
-
+  const handleDelete = async (artistId: number) => {
     setDeletingId(artistId);
     try {
       await deleteArtist(artistId);
@@ -35,7 +31,13 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
       toast.error('Failed to remove artist');
     } finally {
       setDeletingId(null);
+      setPendingDeleteId(null);
     }
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent, artistId: number) => {
+    e.stopPropagation();
+    setPendingDeleteId(artistId);
   };
 
   const normalizedQuery = searchTerm.trim().toLowerCase();
@@ -60,6 +62,17 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
 
   return (
     <>
+      {pendingDeleteId !== null && (
+        <ConfirmModal
+          title="Unfollow artist"
+          message="Are you sure you want to unfollow this artist? This will also stop checking for new artworks from them."
+          confirmText="Unfollow"
+          cancelText="Cancel"
+          confirmButtonClass="btn-error"
+          onConfirm={() => handleDelete(pendingDeleteId)}
+          onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
       {/* Mobile overlay */}
       {isMobileOpen && onMobileClose && (
         <div className="mobile-overlay" onClick={onMobileClose}></div>
@@ -184,7 +197,7 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
 
               <button
                 className="btn-delete"
-                onClick={(e) => handleDelete(e, artist.id)}
+                onClick={(e) => handleDeleteClick(e, artist.id)}
                 disabled={deletingId === artist.id}
                 title="Unfollow"
               >
