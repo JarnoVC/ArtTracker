@@ -97,7 +97,7 @@ function ArtworkPreviewModal({ artwork, onClose, onMarkSeen }: ArtworkPreviewMod
               <p className="artwork-preview-artist">
                 <span className="meta-label">Artist:</span>
                 <a
-                  href={artwork.artwork_url}
+                  href={"https://www.artstation.com/" + artwork.username}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="artist-link"
