@@ -37,6 +37,7 @@ export interface Artwork {
   upload_date?: string;
   last_updated_at?: string;
   is_new: number;
+  is_favorite?: number;
   discovered_at: string;
 }
 
@@ -316,7 +317,7 @@ export async function deleteArtist(id: number, user_id: number): Promise<boolean
 }
 
 // Artwork operations
-export async function getAllArtworks(user_id: number, filters?: { artist_id?: number; new_only?: boolean }): Promise<Artwork[]> {
+export async function getAllArtworks(user_id: number, filters?: { artist_id?: number; new_only?: boolean; favorites_only?: boolean }): Promise<Artwork[]> {
   let queryText = 'SELECT * FROM artworks WHERE user_id = $1';
   const params: any[] = [user_id];
   let paramIndex = 2;
@@ -328,6 +329,10 @@ export async function getAllArtworks(user_id: number, filters?: { artist_id?: nu
 
   if (filters?.new_only) {
     queryText += ` AND is_new = 1`;
+  }
+
+  if (filters?.favorites_only) {
+    queryText += ` AND is_favorite = 1`;
   }
 
   queryText += ' ORDER BY COALESCE(upload_date, discovered_at) DESC';
@@ -346,11 +351,12 @@ export async function getAllArtworks(user_id: number, filters?: { artist_id?: nu
     upload_date: row.upload_date ? row.upload_date.toISOString() : undefined,
     last_updated_at: row.last_updated_at ? row.last_updated_at.toISOString() : undefined,
     is_new: row.is_new,
+    is_favorite: row.is_favorite || 0,
     discovered_at: row.discovered_at.toISOString()
   }));
 }
 
-export async function getArtworksWithArtistInfo(user_id: number, filters?: { artist_id?: number; new_only?: boolean }) {
+export async function getArtworksWithArtistInfo(user_id: number, filters?: { artist_id?: number; new_only?: boolean; favorites_only?: boolean }) {
   const artworks = await getAllArtworks(user_id, filters);
   
   // Get all unique artist IDs
@@ -441,6 +447,7 @@ export async function addArtwork(
           upload_date: updated.upload_date ? updated.upload_date.toISOString() : undefined,
           last_updated_at: updated.last_updated_at ? updated.last_updated_at.toISOString() : undefined,
           is_new: updated.is_new,
+          is_favorite: updated.is_favorite || 0,
           discovered_at: updated.discovered_at.toISOString()
         },
         isNew: false,
@@ -461,6 +468,7 @@ export async function addArtwork(
         upload_date: row.upload_date ? row.upload_date.toISOString() : undefined,
         last_updated_at: row.last_updated_at ? row.last_updated_at.toISOString() : undefined,
         is_new: row.is_new,
+        is_favorite: row.is_favorite || 0,
         discovered_at: row.discovered_at.toISOString()
       },
       isNew: false,
@@ -507,6 +515,7 @@ export async function addArtwork(
       upload_date: row.upload_date ? row.upload_date.toISOString() : undefined,
       last_updated_at: row.last_updated_at ? row.last_updated_at.toISOString() : undefined,
       is_new: row.is_new,
+      is_favorite: row.is_favorite || 0,
       discovered_at: row.discovered_at.toISOString()
     },
     isNew: true,
@@ -599,5 +608,24 @@ export async function getPublicFeaturedArtworks(limit: number = 10): Promise<Pub
     username: row.username || undefined,
     display_name: row.display_name || undefined,
   }));
+}
+
+export async function toggleFavorite(id: number, user_id: number): Promise<boolean> {
+  // First check if artwork exists and belongs to user
+  const checkResult = await query('SELECT is_favorite FROM artworks WHERE id = $1 AND user_id = $2', [id, user_id]);
+  
+  if (checkResult.rows.length === 0) {
+    return false;
+  }
+  
+  const currentFavorite = checkResult.rows[0].is_favorite || 0;
+  const newFavorite = currentFavorite === 1 ? 0 : 1;
+  
+  const result = await query(
+    'UPDATE artworks SET is_favorite = $1 WHERE id = $2 AND user_id = $3',
+    [newFavorite, id, user_id]
+  );
+  
+  return (result.rowCount ?? 0) > 0;
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Artist, Artwork, markArtworkSeen, markAllSeen } from '../api';
+import { Artist, Artwork, markArtworkSeen, markAllSeen, toggleFavorite } from '../api';
 import { toast } from 'react-hot-toast';
 import ArtworkPreviewModal from './ArtworkPreviewModal';
 import './ArtworkGrid.css';
@@ -8,6 +8,8 @@ interface ArtworkGridProps {
   artworks: Artwork[];
   showNewOnly: boolean;
   onToggleNewOnly: () => void;
+  showFavorites: boolean;
+  onToggleFavorites: () => void;
   onArtworkSeen: () => void;
   selectedArtist?: Artist;
   onScrapeArtist?: (artistId: number) => Promise<void>;
@@ -15,7 +17,7 @@ interface ArtworkGridProps {
   onOpenMobileArtistList?: () => void;
 }
 
-function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, selectedArtist, onScrapeArtist, isLoading = false, onOpenMobileArtistList }: ArtworkGridProps) {
+function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, showFavorites, onToggleFavorites, onArtworkSeen, selectedArtist, onScrapeArtist, isLoading = false, onOpenMobileArtistList }: ArtworkGridProps) {
   const newCount = artworks.filter(a => a.is_new).length;
   const [isScraping, setIsScraping] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -60,6 +62,23 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
       }
     } catch (error) {
       toast.error('Failed to mark as seen');
+    }
+  };
+
+  const handleToggleFavorite = async (artworkId: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    try {
+      await toggleFavorite(artworkId);
+      onArtworkSeen(); // Refresh artworks to update favorite status
+      // Update preview artwork if it's currently open
+      if (previewArtwork?.id === artworkId) {
+        const currentFavorite = previewArtwork.is_favorite || 0;
+        setPreviewArtwork({ ...previewArtwork, is_favorite: currentFavorite === 1 ? 0 : 1 });
+      }
+    } catch (error) {
+      toast.error('Failed to toggle favorite');
     }
   };
 
@@ -125,7 +144,9 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
           )}
           <div className="artwork-header-title">
             <h2>
-              {selectedArtist ? (
+              {showFavorites ? (
+                <>Favorites</>
+              ) : selectedArtist ? (
                 <>Artworks by @{selectedArtist.username}</>
               ) : (
                 <>Latest from All Artists</>
@@ -143,7 +164,7 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
         </div>
 
         <div className="artwork-actions">
-          {newCount > 0 && (
+          {newCount > 0 && !showFavorites && (
             <button 
               className="btn btn-secondary"
               onClick={handleMarkAllSeen}
@@ -153,11 +174,20 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
           )}
           
           <button
-            className={`btn ${showNewOnly ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={onToggleNewOnly}
+            className={`btn ${showFavorites ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={onToggleFavorites}
           >
-            {showNewOnly ? 'New Only' : 'Show All'}
+            {showFavorites ? '❤️ Favorites' : 'Show Favorites'}
           </button>
+          
+          {!showFavorites && (
+            <button
+              className={`btn ${showNewOnly ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={onToggleNewOnly}
+            >
+              {showNewOnly ? 'New Only' : 'Show All'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -170,11 +200,13 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
       ) : artworks.length === 0 ? (
         <div className="empty-artworks">
           <p>
-            {showNewOnly 
-              ? 'No new artworks' 
-              : selectedArtist 
-                ? 'No artworks found for this artist yet.' 
-                : 'No artworks yet. Add artists and click "Check for Updates"'
+            {showFavorites
+              ? 'No favorites yet. Click the heart icon on any artwork to add it to your favorites.'
+              : showNewOnly 
+                ? 'No new artworks' 
+                : selectedArtist 
+                  ? 'No artworks found for this artist yet.' 
+                  : 'No artworks yet. Add artists and click "Check for Updates"'
             }
           </p>
           {selectedArtist && !showNewOnly && (
@@ -214,6 +246,19 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
                 aria-label="Preview artwork"
               >
                 <img src="/icons/enlarge.svg" alt="Preview" className="enlarge-icon" />
+              </button>
+
+              <button
+                className="artwork-favorite-btn"
+                onClick={(e) => handleToggleFavorite(artwork.id, e)}
+                title={(artwork.is_favorite || 0) === 1 ? "Remove from favorites" : "Add to favorites"}
+                aria-label={(artwork.is_favorite || 0) === 1 ? "Remove from favorites" : "Add to favorites"}
+              >
+                <img 
+                  src={(artwork.is_favorite || 0) === 1 ? "/icons/favorite.svg" : "/icons/nofavorite.svg"} 
+                  alt={(artwork.is_favorite || 0) === 1 ? "Favorite" : "Not favorite"} 
+                  className="favorite-icon" 
+                />
               </button>
 
               {artwork.is_new === 1 && (
@@ -276,6 +321,12 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, onArtworkSeen, se
           artwork={previewArtwork}
           onClose={handleClosePreview}
           onMarkSeen={handlePreviewMarkSeen}
+          onFavoriteToggle={() => {
+            onArtworkSeen(); // Refresh artworks to update favorite status
+            // Update preview artwork favorite status
+            const currentFavorite = previewArtwork.is_favorite || 0;
+            setPreviewArtwork({ ...previewArtwork, is_favorite: currentFavorite === 1 ? 0 : 1 });
+          }}
         />
       )}
     </>

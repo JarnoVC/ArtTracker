@@ -46,6 +46,7 @@ export interface Artwork {
   upload_date?: string;
   last_updated_at?: string;
   is_new: number;
+  is_favorite?: number;
   discovered_at: string;
 }
 
@@ -295,7 +296,7 @@ export function deleteArtist(id: number, user_id: number): boolean {
 }
 
 // Artwork operations
-export function getAllArtworks(user_id: number, filters?: { artist_id?: number; new_only?: boolean }): Artwork[] {
+export function getAllArtworks(user_id: number, filters?: { artist_id?: number; new_only?: boolean; favorites_only?: boolean }): Artwork[] {
   let artworks = db.artworks.filter(a => a.user_id === user_id);
 
   if (filters?.artist_id) {
@@ -306,6 +307,10 @@ export function getAllArtworks(user_id: number, filters?: { artist_id?: number; 
     artworks = artworks.filter(a => a.is_new === 1);
   }
 
+  if (filters?.favorites_only) {
+    artworks = artworks.filter(a => (a.is_favorite || 0) === 1);
+  }
+
   return artworks.sort((a, b) => {
     const dateA = new Date(a.upload_date || a.discovered_at).getTime();
     const dateB = new Date(b.upload_date || b.discovered_at).getTime();
@@ -313,7 +318,7 @@ export function getAllArtworks(user_id: number, filters?: { artist_id?: number; 
   });
 }
 
-export function getArtworksWithArtistInfo(user_id: number, filters?: { artist_id?: number; new_only?: boolean }) {
+export function getArtworksWithArtistInfo(user_id: number, filters?: { artist_id?: number; new_only?: boolean; favorites_only?: boolean }) {
   const artworks = getAllArtworks(user_id, filters);
   
   return artworks.map(artwork => {
@@ -390,6 +395,7 @@ export function addArtwork(
     upload_date,
     last_updated_at: updated_at || upload_date || new Date().toISOString(),
     is_new: 1,
+    is_favorite: 0,
     discovered_at: new Date().toISOString()
   };
 
@@ -426,6 +432,15 @@ export function markAllArtworksSeen(user_id: number, artist_id?: number): number
 
 export function getNewArtworksCount(user_id: number): number {
   return db.artworks.filter(a => a.user_id === user_id && a.is_new === 1).length;
+}
+
+export function toggleFavorite(id: number, user_id: number): boolean {
+  const artwork = db.artworks.find(a => a.id === id && a.user_id === user_id);
+  if (!artwork) return false;
+
+  artwork.is_favorite = (artwork.is_favorite || 0) === 1 ? 0 : 1;
+  saveDatabase();
+  return true;
 }
 
 export function deleteAllArtworks(user_id: number): number {

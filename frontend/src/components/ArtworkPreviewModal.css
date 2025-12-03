@@ -134,6 +134,13 @@
   hyphens: auto;
 }
 
+.artwork-preview-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .artwork-preview-new-badge {
   background: var(--primary);
   color: white;
@@ -144,6 +151,31 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   flex-shrink: 0;
+}
+
+.artwork-preview-favorite-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.artwork-preview-favorite-btn:hover {
+  background-color: rgba(0, 0, 0, 0.15);
+  transform: scale(1.1);
+}
+
+.artwork-preview-favorite-btn .favorite-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
 .artwork-preview-meta {

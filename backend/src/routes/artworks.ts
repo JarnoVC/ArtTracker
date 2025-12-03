@@ -13,9 +13,9 @@ router.get('/', async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
-    const { artist_id, new_only, latest_per_artist } = req.query;
+    const { artist_id, new_only, favorites_only, latest_per_artist } = req.query;
     
-    const filters: { artist_id?: number; new_only?: boolean } = {};
+    const filters: { artist_id?: number; new_only?: boolean; favorites_only?: boolean } = {};
     
     if (artist_id) {
       filters.artist_id = parseInt(artist_id as string);
@@ -23,6 +23,10 @@ router.get('/', async (req, res) => {
     
     if (new_only === 'true') {
       filters.new_only = true;
+    }
+    
+    if (favorites_only === 'true') {
+      filters.favorites_only = true;
     }
     
     let artworks = await db.getArtworksWithArtistInfo(req.user.id, filters);
@@ -104,6 +108,25 @@ router.get('/new-count', async (req, res) => {
   } catch (error) {
     console.error('Error getting new count:', error);
     res.status(500).json({ error: 'Failed to get new artworks count' });
+  }
+});
+
+// Toggle favorite status
+router.patch('/:id/toggle-favorite', async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const success = await db.toggleFavorite(parseInt(req.params.id), req.user.id);
+    
+    if (!success) {
+      return res.status(404).json({ error: 'Artwork not found' });
+    }
+    
+    res.json({ message: 'Favorite status toggled' });
+  } catch (error) {
+    console.error('Error toggling favorite:', error);
+    res.status(500).json({ error: 'Failed to toggle favorite' });
   }
 });
 

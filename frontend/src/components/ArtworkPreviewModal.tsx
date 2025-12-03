@@ -1,14 +1,16 @@
 import { useEffect } from 'react';
-import { Artwork } from '../api';
+import { Artwork, toggleFavorite } from '../api';
+import { toast } from 'react-hot-toast';
 import './ArtworkPreviewModal.css';
 
 interface ArtworkPreviewModalProps {
   artwork: Artwork | null;
   onClose: () => void;
   onMarkSeen?: (artworkId: number) => void;
+  onFavoriteToggle?: () => void;
 }
 
-function ArtworkPreviewModal({ artwork, onClose, onMarkSeen }: ArtworkPreviewModalProps) {
+function ArtworkPreviewModal({ artwork, onClose, onMarkSeen, onFavoriteToggle }: ArtworkPreviewModalProps) {
   useEffect(() => {
     if (!artwork) return;
 
@@ -40,6 +42,18 @@ function ArtworkPreviewModal({ artwork, onClose, onMarkSeen }: ArtworkPreviewMod
     e.stopPropagation();
     if (onMarkSeen) {
       onMarkSeen(artwork.id);
+    }
+  };
+
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await toggleFavorite(artwork.id);
+      if (onFavoriteToggle) {
+        onFavoriteToggle();
+      }
+    } catch (error) {
+      toast.error('Failed to toggle favorite');
     }
   };
 
@@ -88,9 +102,23 @@ function ArtworkPreviewModal({ artwork, onClose, onMarkSeen }: ArtworkPreviewMod
           <div className="artwork-preview-info">
             <div className="artwork-preview-header">
               <h2 className="artwork-preview-title">{artwork.title}</h2>
-              {artwork.is_new === 1 && (
-                <span className="artwork-preview-new-badge">NEW</span>
-              )}
+              <div className="artwork-preview-badges">
+                {artwork.is_new === 1 && (
+                  <span className="artwork-preview-new-badge">NEW</span>
+                )}
+                <button
+                  className="artwork-preview-favorite-btn"
+                  onClick={handleToggleFavorite}
+                  title={(artwork.is_favorite || 0) === 1 ? "Remove from favorites" : "Add to favorites"}
+                  aria-label={(artwork.is_favorite || 0) === 1 ? "Remove from favorites" : "Add to favorites"}
+                >
+                  <img 
+                    src={(artwork.is_favorite || 0) === 1 ? "/icons/favorite.svg" : "/icons/nofavorite.svg"} 
+                    alt={(artwork.is_favorite || 0) === 1 ? "Favorite" : "Not favorite"} 
+                    className="favorite-icon" 
+                  />
+                </button>
+              </div>
             </div>
 
             <div className="artwork-preview-meta">

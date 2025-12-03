@@ -38,6 +38,7 @@ export interface Artwork {
   upload_date?: string;
   last_updated_at?: string;
   is_new: number;
+  is_favorite?: number;
   discovered_at: string;
 }
 
@@ -150,14 +151,14 @@ export async function deleteArtist(id: number, user_id: number): Promise<boolean
 }
 
 // Artwork operations
-export async function getAllArtworks(user_id: number, filters?: { artist_id?: number; new_only?: boolean }): Promise<Artwork[]> {
+export async function getAllArtworks(user_id: number, filters?: { artist_id?: number; new_only?: boolean; favorites_only?: boolean }): Promise<Artwork[]> {
   if (usePostgres) {
     return pgDb.getAllArtworks(user_id, filters);
   }
   return toPromise(jsonDb.getAllArtworks(user_id, filters));
 }
 
-export async function getArtworksWithArtistInfo(user_id: number, filters?: { artist_id?: number; new_only?: boolean }) {
+export async function getArtworksWithArtistInfo(user_id: number, filters?: { artist_id?: number; new_only?: boolean; favorites_only?: boolean }) {
   if (usePostgres) {
     return pgDb.getArtworksWithArtistInfo(user_id, filters);
   }
@@ -235,4 +236,11 @@ export async function getPublicFeaturedArtworks(limit: number = 10): Promise<Pub
     return pgDb.getPublicFeaturedArtworks(normalizedLimit);
   }
   return toPromise(jsonDb.getPublicFeaturedArtworks(normalizedLimit));
+}
+
+export async function toggleFavorite(id: number, user_id: number): Promise<boolean> {
+  if (usePostgres) {
+    return pgDb.toggleFavorite(id, user_id);
+  }
+  return toPromise(jsonDb.toggleFavorite(id, user_id));
 }

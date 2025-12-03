@@ -30,6 +30,7 @@ function App() {
   const [isScrapingFromSync, setIsScrapingFromSync] = useState(false);
   const [newCount, setNewCount] = useState(0);
   const [showNewOnly, setShowNewOnly] = useState(false);
+  const [showFavorites, setShowFavorites] = useState(false);
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
   const [isLoadingArtworks, setIsLoadingArtworks] = useState(false);
   const [isMobileArtistListOpen, setIsMobileArtistListOpen] = useState(false);
@@ -146,7 +147,7 @@ function App() {
     if (isAuthenticated) {
       loadArtworks();
     }
-  }, [selectedArtistId, showNewOnly, isAuthenticated]);
+  }, [selectedArtistId, showNewOnly, showFavorites, isAuthenticated]);
 
   const loadArtists = async (showLoading = false) => {
     if (showLoading) {
@@ -200,11 +201,11 @@ function App() {
     }
 
     try {
-      // Show only latest per artist when viewing "All Artists"
-      const latestPerArtist = selectedArtistId === null;
-      const requestKey = `loadArtworks:${selectedArtistId ?? 'all'}:${showNewOnly}:${latestPerArtist}`;
+      // Show only latest per artist when viewing "All Artists" (but not when showing favorites)
+      const latestPerArtist = selectedArtistId === null && !showFavorites;
+      const requestKey = `loadArtworks:${selectedArtistId ?? 'all'}:${showNewOnly}:${showFavorites}:${latestPerArtist}`;
       const data = await deduplicateRequest(requestKey, async () => {
-        return await getArtworks(selectedArtistId, showNewOnly, latestPerArtist);
+        return await getArtworks(selectedArtistId, showNewOnly && !showFavorites, latestPerArtist, showFavorites);
       });
       setArtworks(data);
       saveCachedData({ artworks: data, selectedArtistId });
@@ -495,7 +496,15 @@ function App() {
         <ArtworkGrid 
           artworks={artworks}
           showNewOnly={showNewOnly}
-          onToggleNewOnly={() => setShowNewOnly(!showNewOnly)}
+          onToggleNewOnly={() => {
+            setShowNewOnly(!showNewOnly);
+            setShowFavorites(false); // Disable favorites when toggling new only
+          }}
+          showFavorites={showFavorites}
+          onToggleFavorites={() => {
+            setShowFavorites(!showFavorites);
+            setShowNewOnly(false); // Disable new only when toggling favorites
+          }}
           onArtworkSeen={handleArtworkSeen}
           selectedArtist={artists.find(a => a.id === selectedArtistId)}
           onScrapeArtist={handleScrapeSingleArtist}

@@ -60,6 +60,7 @@ export interface Artwork {
   upload_date?: string;
   last_updated_at?: string;
   is_new: number;
+  is_favorite?: number;
   discovered_at: string;
   username?: string;
   display_name?: string;
@@ -94,12 +95,14 @@ export const deleteArtist = async (id: number): Promise<void> => {
 export const getArtworks = async (
   artistId: number | null = null, 
   newOnly: boolean = false,
-  latestPerArtist: boolean = false
+  latestPerArtist: boolean = false,
+  favoritesOnly: boolean = false
 ): Promise<Artwork[]> => {
   const params = new URLSearchParams();
   if (artistId) params.append('artist_id', artistId.toString());
   if (newOnly) params.append('new_only', 'true');
   if (latestPerArtist) params.append('latest_per_artist', 'true');
+  if (favoritesOnly) params.append('favorites_only', 'true');
   
   const response = await axios.get(`${API_BASE}/artworks?${params}`);
   return response.data;
@@ -118,6 +121,10 @@ export const markArtworkSeen = async (id: number): Promise<void> => {
 
 export const markAllSeen = async (artistId?: number): Promise<void> => {
   await axios.post(`${API_BASE}/artworks/mark-all-seen`, { artist_id: artistId });
+};
+
+export const toggleFavorite = async (id: number): Promise<void> => {
+  await axios.patch(`${API_BASE}/artworks/${id}/toggle-favorite`);
 };
 
 export const getNewCount = async (): Promise<{ count: number }> => {
