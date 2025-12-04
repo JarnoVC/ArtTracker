@@ -25,6 +25,19 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Decode HTML entities in strings
+function decodeHtmlEntities(text: string): string {
+  if (!text) return text;
+  
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+}
+
 let browser: any = null;
 
 async function getBrowser() {
@@ -407,7 +420,7 @@ export async function scrapeArtist(artistId: number, userId: number) {
           
           const artwork: ScrapedArtwork = {
             artwork_id: project.hash_id,
-            title: project.title || 'Untitled',
+            title: decodeHtmlEntities(project.title || 'Untitled'),
             thumbnail_url: thumbnailUrl,
             high_quality_image_url: thumbnailUrl ? convertToHighQualityUrl(thumbnailUrl) : undefined,
             artwork_url: project.permalink || `https://www.artstation.com/artwork/${project.hash_id}`,
@@ -625,7 +638,7 @@ async function scrapeFromProfilePage(artistId: number, userId: number, artist: a
             initialState.projects.data.forEach((project: any) => {
               result.artworks.push({
                 artwork_id: project.hash_id || project.id?.toString() || '',
-                title: project.title || 'Untitled',
+                title: decodeHtmlEntities(project.title || 'Untitled'),
                 thumbnail_url: project.cover?.thumb_url || project.cover?.small_square_url || project.cover?.url || '',
                 high_quality_image_url: (project.cover?.thumb_url || project.cover?.small_square_url || project.cover?.url || '') 
                   ? convertToHighQualityUrl(project.cover?.thumb_url || project.cover?.small_square_url || project.cover?.url || '') 
@@ -1008,7 +1021,7 @@ export async function scrapeArtistUpdates(artistId: number, userId: number, opti
 
         const artwork: ScrapedArtwork = {
           artwork_id: project.hash_id,
-          title: project.title || 'Untitled',
+          title: decodeHtmlEntities(project.title || 'Untitled'),
           thumbnail_url: project.cover?.thumb_url || 
                         project.cover?.small_square_url || 
                         project.cover?.url || 

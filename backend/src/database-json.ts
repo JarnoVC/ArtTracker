@@ -354,13 +354,13 @@ export function addArtwork(
   );
   
   if (existing) {
+    // Only check for meaningful content changes (ignore timestamp-only changes)
+    // We ignore upload_date and updated_at changes to prevent false positives
     const changed =
       existing.title !== title ||
       existing.thumbnail_url !== thumbnail_url ||
       (existing.high_quality_image_url || null) !== (high_quality_image_url || null) ||
-      existing.artwork_url !== artwork_url ||
-      existing.upload_date !== upload_date ||
-      existing.last_updated_at !== updated_at;
+      existing.artwork_url !== artwork_url;
 
     if (changed) {
       existing.title = title;

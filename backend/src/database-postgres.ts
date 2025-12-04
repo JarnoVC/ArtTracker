@@ -408,18 +408,15 @@ export async function addArtwork(
   if (existingResult.rows.length > 0) {
     const row = existingResult.rows[0];
     const newUploadDate = upload_date ? new Date(upload_date) : null;
+    // Only check for meaningful content changes (ignore timestamp-only changes)
     const titleChanged = row.title !== title;
     const thumbChanged = row.thumbnail_url !== thumbnail_url;
     const highQualityChanged = (row.high_quality_image_url || null) !== (high_quality_image_url || null);
     const urlChanged = row.artwork_url !== artwork_url;
-    const uploadChanged =
-      (row.upload_date && newUploadDate && row.upload_date.getTime() !== newUploadDate.getTime()) ||
-      (!!row.upload_date !== !!newUploadDate);
-    const existingUpdatedAt = row.last_updated_at ? row.last_updated_at.getTime() : null;
-    const newUpdatedAt = updated_at ? new Date(updated_at).getTime() : null;
-    const updatedAtChanged = existingUpdatedAt !== newUpdatedAt;
 
-    if (titleChanged || thumbChanged || highQualityChanged || urlChanged || uploadChanged || updatedAtChanged) {
+    // Only mark as updated if actual content changed (title, images, or URL)
+    // We ignore upload_date and updated_at changes to prevent false positives
+    if (titleChanged || thumbChanged || highQualityChanged || urlChanged) {
       const updateResult = await query(
         `UPDATE artworks
          SET title = $1,
