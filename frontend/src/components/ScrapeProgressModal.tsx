@@ -160,8 +160,23 @@ function ScrapeProgressModal({ artists, onComplete, isInitialImport = false }: S
     <div className="modal-backdrop scrape-modal-backdrop">
       <div className="modal scrape-progress-modal">
         <div className="modal-header">
-          <h2>
-            {isComplete ? '✅ Check Complete!' : '🔄 Checking for Updates...'}
+          <h2 className="scrape-modal-title">
+            {isComplete ? (
+              <>
+                <span className="check-icon">✅</span>
+                Check Complete!
+              </>
+            ) : (
+              <>
+                <img 
+                  src="/icons/Refresh.svg" 
+                  alt="" 
+                  className="refresh-icon loading-spin"
+                  aria-hidden="true"
+                />
+                Checking for Updates...
+              </>
+            )}
           </h2>
         </div>
 

@@ -193,7 +193,12 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, showFavorites, on
 
       {isLoading ? (
         <div className="empty-artworks">
-          <div style={{ fontSize: '48px', marginBottom: '1rem' }}>🔄</div>
+          <img 
+            src="/icons/Refresh.svg" 
+            alt="" 
+            className="loading-indicator loading-spin"
+            aria-hidden="true"
+          />
           <p>Loading artworks...</p>
           <p className="empty-hint">Please wait</p>
         </div>

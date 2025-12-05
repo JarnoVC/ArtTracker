@@ -10,8 +10,23 @@ function SyncProgressModal({ isComplete, onComplete }: SyncProgressModalProps) {
     <div className="modal-backdrop sync-modal-backdrop">
       <div className="modal sync-progress-modal">
         <div className="modal-header">
-          <h2>
-            {isComplete ? '✅ Sync Complete!' : '🔄 Syncing with ArtStation...'}
+          <h2 className="sync-modal-title">
+            {isComplete ? (
+              <>
+                <span className="check-icon">✅</span>
+                Sync Complete!
+              </>
+            ) : (
+              <>
+                <img 
+                  src="/icons/Refresh.svg" 
+                  alt="" 
+                  className="refresh-icon loading-spin"
+                  aria-hidden="true"
+                />
+                Syncing with ArtStation...
+              </>
+            )}
           </h2>
         </div>
 

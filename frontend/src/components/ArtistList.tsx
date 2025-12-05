@@ -146,7 +146,12 @@ function ArtistList({ artists, selectedArtistId, onSelectArtist, onArtistDeleted
       <div className="artists-scroll">
         {isLoading || isSyncing ? (
           <div className="empty-state">
-            <div className="loading-indicator">🔄</div>
+            <img 
+              src="/icons/Refresh.svg" 
+              alt="" 
+              className="loading-indicator loading-spin"
+              aria-hidden="true"
+            />
             <p>Loading artists...</p>
             <p className="empty-hint">Please wait</p>
           </div>

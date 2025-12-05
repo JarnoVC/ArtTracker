@@ -133,6 +133,25 @@
   margin-top: 0.5rem;
 }
 
+.loading-indicator {
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1rem;
+}
+
+.loading-indicator.loading-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .artwork-card {
   background-color: var(--surface);
   border-radius: 12px;

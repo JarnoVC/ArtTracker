@@ -34,6 +34,33 @@
   margin: 0;
   font-size: 1.5rem;
   color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sync-progress-modal .modal-header h2 .refresh-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.sync-progress-modal .modal-header h2 .refresh-icon.loading-spin {
+  animation: spin 1s linear infinite;
+}
+
+.sync-progress-modal .modal-header h2 .check-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sync-progress-modal .modal-body {
