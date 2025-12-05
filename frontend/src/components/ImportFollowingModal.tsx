@@ -150,7 +150,14 @@ function ImportFollowingModal({ onClose, onImportComplete, onShowProgress }: Imp
                   <span className="progress-icon">
                     {loadingPhase === 'fetching' && '🔍'}
                     {loadingPhase === 'processing' && '⚙️'}
-                    {loadingPhase === 'complete' && '✓'}
+                    {loadingPhase === 'complete' && (
+                      <img 
+                        src="/icons/check.svg" 
+                        alt="" 
+                        className="progress-check-icon"
+                        aria-hidden="true"
+                      />
+                    )}
                   </span>
                   <div className="progress-text">
                     <p className="progress-main">{currentStatus}</p>

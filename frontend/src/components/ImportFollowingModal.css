@@ -282,6 +282,15 @@
   font-size: 2rem;
   line-height: 1;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress-check-icon {
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
 }
 
 .progress-text {

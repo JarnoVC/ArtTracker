@@ -163,7 +163,12 @@ function ScrapeProgressModal({ artists, onComplete, isInitialImport = false }: S
           <h2 className="scrape-modal-title">
             {isComplete ? (
               <>
-                <span className="check-icon">✅</span>
+                <img 
+                  src="/icons/check.svg" 
+                  alt="" 
+                  className="check-icon"
+                  aria-hidden="true"
+                />
                 Check Complete!
               </>
             ) : (
@@ -203,7 +208,12 @@ function ScrapeProgressModal({ artists, onComplete, isInitialImport = false }: S
           {isComplete && (
             <div className="scrape-stats">
               <div className="stat">
-                <span className="stat-icon">✓</span>
+                <img 
+                  src="/icons/check.svg" 
+                  alt="" 
+                  className="stat-icon"
+                  aria-hidden="true"
+                />
                 <span className="stat-value">{completedCount}</span>
                 <span className="stat-label">Updated</span>
               </div>
@@ -244,7 +254,14 @@ function ScrapeProgressModal({ artists, onComplete, isInitialImport = false }: S
                   {artist.status === 'scraping' && (
                     <span className="spinner spinner-small" title="Scraping artworks" aria-hidden="true"></span>
                   )}
-                  {artist.status === 'completed' && '✓'}
+                  {artist.status === 'completed' && (
+                    <img 
+                      src="/icons/check.svg" 
+                      alt="" 
+                      className="artist-status-check"
+                      aria-hidden="true"
+                    />
+                  )}
                   {artist.status === 'skipped' && '⏭'}
                   {artist.status === 'failed' && '✗'}
                 </div>

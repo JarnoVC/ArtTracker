@@ -13,7 +13,12 @@ function SyncProgressModal({ isComplete, onComplete }: SyncProgressModalProps) {
           <h2 className="sync-modal-title">
             {isComplete ? (
               <>
-                <span className="check-icon">✅</span>
+                <img 
+                  src="/icons/check.svg" 
+                  alt="" 
+                  className="check-icon"
+                  aria-hidden="true"
+                />
                 Sync Complete!
               </>
             ) : (
@@ -41,7 +46,12 @@ function SyncProgressModal({ isComplete, onComplete }: SyncProgressModalProps) {
             </div>
           ) : (
             <div className="sync-complete">
-              <div className="sync-success-icon">✓</div>
+              <img 
+                src="/icons/check.svg" 
+                alt="" 
+                className="sync-success-icon"
+                aria-hidden="true"
+              />
               <p>Sync completed successfully!</p>
             </div>
           )}

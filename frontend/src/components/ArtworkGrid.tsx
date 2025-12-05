@@ -169,7 +169,13 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, showFavorites, on
               className="btn btn-secondary"
               onClick={handleMarkAllSeen}
             >
-              ✓ Mark All as Seen
+              <img 
+                src="/icons/check.svg" 
+                alt="" 
+                className="btn-check-icon"
+                aria-hidden="true"
+              />
+              Mark All as Seen
             </button>
           )}
           
@@ -274,7 +280,12 @@ function ArtworkGrid({ artworks, showNewOnly, onToggleNewOnly, showFavorites, on
                     onClick={(e) => handleMarkSeen(artwork.id, e)}
                     title="Mark as seen"
                   >
-                    ✓
+                    <img 
+                      src="/icons/check.svg" 
+                      alt="" 
+                      className="mark-seen-icon"
+                      aria-hidden="true"
+                    />
                   </button>
                 </div>
               )}

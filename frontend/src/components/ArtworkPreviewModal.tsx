@@ -156,7 +156,13 @@ function ArtworkPreviewModal({ artwork, onClose, onMarkSeen, onFavoriteToggle }:
                   className="btn btn-secondary"
                   onClick={handleMarkSeen}
                 >
-                  ✓ Mark as Seen
+                  <img 
+                    src="/icons/check.svg" 
+                    alt="" 
+                    className="btn-check-icon"
+                    aria-hidden="true"
+                  />
+                  Mark as Seen
                 </button>
               )}
             </div>

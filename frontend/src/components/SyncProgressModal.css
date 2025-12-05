@@ -50,7 +50,8 @@
 }
 
 .sync-progress-modal .modal-header h2 .check-icon {
-  font-size: 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
   flex-shrink: 0;
 }
 
@@ -103,9 +104,11 @@
 }
 
 .sync-success-icon {
-  font-size: 64px;
-  color: var(--success);
+  width: 64px;
+  height: 64px;
   margin-bottom: 1rem;
+  flex-shrink: 0;
+  filter: brightness(0) saturate(100%) invert(57%) sepia(89%) saturate(384%) hue-rotate(120deg) brightness(95%) contrast(86%);
 }
 
 .sync-complete p {

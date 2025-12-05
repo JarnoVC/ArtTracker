@@ -258,6 +258,13 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
+.btn-check-icon {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
   .artwork-preview-modal {
     width: 100vw;
