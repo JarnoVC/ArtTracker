@@ -482,6 +482,16 @@ export async function importFollowingFromUser(userId: number, artstationUsername
           // Don't fail the entire import if one artist's scrape fails
         }
       }
+      
+      // Restore favorites from persistent storage after artworks have been loaded
+      if (clearExisting || newlyAddedArtists.length > 0) {
+        console.log(`\n♥️  Restoring favorites...`);
+        const restoredCount = await db.restoreAllFavoritesForUser(userId);
+        if (restoredCount > 0) {
+          console.log(`  ✓ Restored ${restoredCount} favorite(s) from persistent storage`);
+          results.favorites_restored = restoredCount;
+        }
+      }
     }
     
     // Add newly added artist IDs to results so frontend can scrape them individually

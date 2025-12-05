@@ -50,10 +50,18 @@ export interface Artwork {
   discovered_at: string;
 }
 
+interface PersistentFavorite {
+  user_id: number;
+  artist_username: string;
+  artwork_id: string;
+  artwork_url: string;
+}
+
 interface Database {
   users: User[];
   artists: Artist[];
   artworks: Artwork[];
+  persistentFavorites?: PersistentFavorite[]; // Optional for backward compatibility
   nextUserId: number;
   nextArtistId: number;
   nextArtworkId: number;
@@ -63,6 +71,7 @@ let db: Database = {
   users: [],
   artists: [],
   artworks: [],
+  persistentFavorites: [],
   nextUserId: 1,
   nextArtistId: 1,
   nextArtworkId: 1
@@ -135,6 +144,36 @@ function loadDatabase(): { db: Database; wasMigrated: boolean } {
         
         wasMigrated = true;
         console.log(`🔄 Migrated existing data to default user (ID: ${defaultUser.id})`);
+      }
+    }
+    
+    // Initialize persistentFavorites if it doesn't exist
+    if (!parsed.persistentFavorites || !Array.isArray(parsed.persistentFavorites)) {
+      parsed.persistentFavorites = [];
+      wasMigrated = true;
+    }
+    
+    // Migrate existing favorites to persistentFavorites if not already migrated
+    if (parsed.artworks && parsed.artists && parsed.persistentFavorites.length === 0) {
+      const favoritesToMigrate: PersistentFavorite[] = [];
+      parsed.artworks.forEach((artwork: any) => {
+        if (artwork.is_favorite === 1) {
+          const artist = parsed.artists.find((a: any) => a.id === artwork.artist_id);
+          if (artist) {
+            favoritesToMigrate.push({
+              user_id: artwork.user_id,
+              artist_username: artist.username.toLowerCase(),
+              artwork_id: artwork.artwork_id,
+              artwork_url: artwork.artwork_url
+            });
+          }
+        }
+      });
+      
+      if (favoritesToMigrate.length > 0) {
+        parsed.persistentFavorites = favoritesToMigrate;
+        wasMigrated = true;
+        console.log(`💾 Migrated ${favoritesToMigrate.length} favorite(s) to persistent storage`);
       }
     }
     
@@ -349,18 +388,32 @@ export function addArtwork(
   options: AddArtworkOptions = {}
 ): { artwork: Artwork | null; isNew: boolean; wasUpdated?: boolean; skipped?: boolean } {
   const { allowInsert = true, markUpdatesAsNew = true } = options;
+  
+  // Get artist for favorite lookup
+  const artist = db.artists.find(a => a.id === artist_id && a.user_id === user_id);
+  if (!artist) {
+    throw new Error('Artist not found');
+  }
+  
+  // Check if this should be a favorite from persistent storage
+  const shouldBeFavorite = isPersistentFavorite(user_id, artist.username, artwork_id);
+  
   const existing = db.artworks.find(
     a => a.user_id === user_id && a.artist_id === artist_id && a.artwork_id === artwork_id
   );
   
   if (existing) {
+    // Restore favorite status if it should be a favorite
+    const favoriteStatus = shouldBeFavorite ? 1 : (existing.is_favorite || 0);
+    
     // Only check for meaningful content changes (ignore timestamp-only changes)
     // We ignore upload_date and updated_at changes to prevent false positives
     const changed =
       existing.title !== title ||
       existing.thumbnail_url !== thumbnail_url ||
       (existing.high_quality_image_url || null) !== (high_quality_image_url || null) ||
-      existing.artwork_url !== artwork_url;
+      existing.artwork_url !== artwork_url ||
+      (existing.is_favorite || 0) !== favoriteStatus;
 
     if (changed) {
       existing.title = title;
@@ -369,11 +422,18 @@ export function addArtwork(
       existing.artwork_url = artwork_url;
       existing.upload_date = upload_date;
       existing.last_updated_at = updated_at || upload_date || existing.last_updated_at;
+      existing.is_favorite = favoriteStatus;
       if (markUpdatesAsNew) {
         existing.is_new = 1;
       }
       saveDatabase();
       return { artwork: existing, isNew: false, wasUpdated: true };
+    }
+
+    // Update favorite status even if nothing else changed
+    if ((existing.is_favorite || 0) !== favoriteStatus) {
+      existing.is_favorite = favoriteStatus;
+      saveDatabase();
     }
 
     return { artwork: existing, isNew: false, wasUpdated: false };
@@ -383,6 +443,8 @@ export function addArtwork(
     return { artwork: null, isNew: false, wasUpdated: false, skipped: true };
   }
 
+  // Insert new artwork with favorite status if it should be a favorite
+  const favoriteValue = shouldBeFavorite ? 1 : 0;
   const artwork: Artwork = {
     id: db.nextArtworkId++,
     user_id,
@@ -395,7 +457,7 @@ export function addArtwork(
     upload_date,
     last_updated_at: updated_at || upload_date || new Date().toISOString(),
     is_new: 1,
-    is_favorite: 0,
+    is_favorite: favoriteValue,
     discovered_at: new Date().toISOString()
   };
 
@@ -438,7 +500,41 @@ export function toggleFavorite(id: number, user_id: number): boolean {
   const artwork = db.artworks.find(a => a.id === id && a.user_id === user_id);
   if (!artwork) return false;
 
-  artwork.is_favorite = (artwork.is_favorite || 0) === 1 ? 0 : 1;
+  const artist = db.artists.find(a => a.id === artwork.artist_id);
+  if (!artist) return false;
+
+  const currentFavorite = (artwork.is_favorite || 0) === 1;
+  const newFavorite = !currentFavorite;
+  
+  artwork.is_favorite = newFavorite ? 1 : 0;
+  
+  // Also update persistent favorites
+  if (!db.persistentFavorites) {
+    db.persistentFavorites = [];
+  }
+  
+  const favoriteKey = `${user_id}:${artist.username.toLowerCase()}:${artwork.artwork_id}`;
+  const existingIndex = db.persistentFavorites.findIndex(
+    pf => pf.user_id === user_id && 
+          pf.artist_username.toLowerCase() === artist.username.toLowerCase() && 
+          pf.artwork_id === artwork.artwork_id
+  );
+  
+  if (newFavorite) {
+    if (existingIndex === -1) {
+      db.persistentFavorites.push({
+        user_id,
+        artist_username: artist.username.toLowerCase(),
+        artwork_id: artwork.artwork_id,
+        artwork_url: artwork.artwork_url
+      });
+    }
+  } else {
+    if (existingIndex !== -1) {
+      db.persistentFavorites.splice(existingIndex, 1);
+    }
+  }
+  
   saveDatabase();
   return true;
 }
@@ -485,5 +581,111 @@ export function getPublicFeaturedArtworks(limit: number = 10): PublicFeaturedArt
       display_name: artist?.display_name,
     };
   });
+}
+
+// Add favorite to persistent storage (survives deletions)
+export function addPersistentFavorite(
+  user_id: number,
+  artist_username: string,
+  artwork_id: string,
+  artwork_url: string
+): void {
+  if (!db.persistentFavorites) {
+    db.persistentFavorites = [];
+  }
+  
+  const key = `${user_id}:${artist_username.toLowerCase()}:${artwork_id}`;
+  const exists = db.persistentFavorites.some(
+    pf => pf.user_id === user_id && 
+          pf.artist_username.toLowerCase() === artist_username.toLowerCase() && 
+          pf.artwork_id === artwork_id
+  );
+  
+  if (!exists) {
+    db.persistentFavorites.push({
+      user_id,
+      artist_username: artist_username.toLowerCase(),
+      artwork_id,
+      artwork_url
+    });
+    saveDatabase();
+  }
+}
+
+// Remove favorite from persistent storage
+export function removePersistentFavorite(
+  user_id: number,
+  artist_username: string,
+  artwork_id: string
+): void {
+  if (!db.persistentFavorites) {
+    return;
+  }
+  
+  const index = db.persistentFavorites.findIndex(
+    pf => pf.user_id === user_id && 
+          pf.artist_username.toLowerCase() === artist_username.toLowerCase() && 
+          pf.artwork_id === artwork_id
+  );
+  
+  if (index !== -1) {
+    db.persistentFavorites.splice(index, 1);
+    saveDatabase();
+  }
+}
+
+// Check if artwork should be a favorite (from persistent storage)
+export function isPersistentFavorite(
+  user_id: number,
+  artist_username: string,
+  artwork_id: string
+): boolean {
+  if (!db.persistentFavorites) {
+    return false;
+  }
+  
+  return db.persistentFavorites.some(
+    pf => pf.user_id === user_id && 
+          pf.artist_username.toLowerCase() === artist_username.toLowerCase() && 
+          pf.artwork_id === artwork_id
+  );
+}
+
+// Restore favorite status for all artworks that match persistent favorites
+export function restoreFavoritesFromPersistent(user_id: number): number {
+  if (!db.persistentFavorites) {
+    return 0;
+  }
+  
+  let restoredCount = 0;
+  
+  db.persistentFavorites.forEach(fav => {
+    if (fav.user_id !== user_id) return;
+    
+    const artist = db.artists.find(a => a.user_id === user_id && a.username.toLowerCase() === fav.artist_username);
+    if (!artist) return;
+    
+    const artwork = db.artworks.find(
+      a => a.user_id === user_id && 
+           a.artist_id === artist.id && 
+           a.artwork_id === fav.artwork_id
+    );
+    
+    if (artwork && (artwork.is_favorite || 0) !== 1) {
+      artwork.is_favorite = 1;
+      restoredCount++;
+    }
+  });
+  
+  if (restoredCount > 0) {
+    saveDatabase();
+  }
+  
+  return restoredCount;
+}
+
+// Batch restore favorites for a user (useful after bulk import)
+export function restoreAllFavoritesForUser(user_id: number): number {
+  return restoreFavoritesFromPersistent(user_id);
 }
 

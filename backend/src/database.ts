@@ -244,3 +244,52 @@ export async function toggleFavorite(id: number, user_id: number): Promise<boole
   }
   return toPromise(jsonDb.toggleFavorite(id, user_id));
 }
+
+// Persistent favorites operations
+export async function addPersistentFavorite(
+  user_id: number,
+  artist_username: string,
+  artwork_id: string,
+  artwork_url: string
+): Promise<void> {
+  if (usePostgres) {
+    return pgDb.addPersistentFavorite(user_id, artist_username, artwork_id, artwork_url);
+  }
+  return toPromise(jsonDb.addPersistentFavorite(user_id, artist_username, artwork_id, artwork_url));
+}
+
+export async function removePersistentFavorite(
+  user_id: number,
+  artist_username: string,
+  artwork_id: string
+): Promise<void> {
+  if (usePostgres) {
+    return pgDb.removePersistentFavorite(user_id, artist_username, artwork_id);
+  }
+  return toPromise(jsonDb.removePersistentFavorite(user_id, artist_username, artwork_id));
+}
+
+export async function isPersistentFavorite(
+  user_id: number,
+  artist_username: string,
+  artwork_id: string
+): Promise<boolean> {
+  if (usePostgres) {
+    return pgDb.isPersistentFavorite(user_id, artist_username, artwork_id);
+  }
+  return toPromise(jsonDb.isPersistentFavorite(user_id, artist_username, artwork_id));
+}
+
+export async function restoreFavoritesFromPersistent(user_id: number): Promise<number> {
+  if (usePostgres) {
+    return pgDb.restoreFavoritesFromPersistent(user_id);
+  }
+  return toPromise(jsonDb.restoreFavoritesFromPersistent(user_id));
+}
+
+export async function restoreAllFavoritesForUser(user_id: number): Promise<number> {
+  if (usePostgres) {
+    return pgDb.restoreAllFavoritesForUser(user_id);
+  }
+  return toPromise(jsonDb.restoreAllFavoritesForUser(user_id));
+}

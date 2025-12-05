@@ -399,6 +399,17 @@ export async function addArtwork(
   options: AddArtworkOptions = {}
 ): Promise<{ artwork: Artwork | null; isNew: boolean; wasUpdated?: boolean; skipped?: boolean }> {
   const { allowInsert = true, markUpdatesAsNew = true } = options;
+  
+  // Get artist username for favorite lookup
+  const artistResult = await query('SELECT username FROM artists WHERE id = $1 AND user_id = $2', [artist_id, user_id]);
+  if (artistResult.rows.length === 0) {
+    throw new Error('Artist not found');
+  }
+  const artist_username = artistResult.rows[0].username;
+  
+  // Check if this should be a favorite from persistent storage
+  const shouldBeFavorite = await isPersistentFavorite(user_id, artist_username, artwork_id);
+  
   // Check if artwork already exists
   const existingResult = await query(
     'SELECT * FROM artworks WHERE user_id = $1 AND artist_id = $2 AND artwork_id = $3',
@@ -408,15 +419,20 @@ export async function addArtwork(
   if (existingResult.rows.length > 0) {
     const row = existingResult.rows[0];
     const newUploadDate = upload_date ? new Date(upload_date) : null;
+    
+    // Restore favorite status if it should be a favorite
+    const favoriteStatus = shouldBeFavorite ? 1 : (row.is_favorite || 0);
+    
     // Only check for meaningful content changes (ignore timestamp-only changes)
     const titleChanged = row.title !== title;
     const thumbChanged = row.thumbnail_url !== thumbnail_url;
     const highQualityChanged = (row.high_quality_image_url || null) !== (high_quality_image_url || null);
     const urlChanged = row.artwork_url !== artwork_url;
+    const favoriteChanged = (row.is_favorite || 0) !== favoriteStatus;
 
-    // Only mark as updated if actual content changed (title, images, or URL)
+    // Only mark as updated if actual content changed (title, images, URL, or favorite status)
     // We ignore upload_date and updated_at changes to prevent false positives
-    if (titleChanged || thumbChanged || highQualityChanged || urlChanged) {
+    if (titleChanged || thumbChanged || highQualityChanged || urlChanged || favoriteChanged) {
       const updateResult = await query(
         `UPDATE artworks
          SET title = $1,
@@ -425,10 +441,21 @@ export async function addArtwork(
              artwork_url = $4,
              upload_date = $5,
              last_updated_at = $6,
-             is_new = CASE WHEN $7 THEN 1 ELSE is_new END
-         WHERE id = $8
+             is_new = CASE WHEN $7 THEN 1 ELSE is_new END,
+             is_favorite = $8
+         WHERE id = $9
          RETURNING *`,
-        [title, thumbnail_url, high_quality_image_url || null, artwork_url, newUploadDate, updated_at ? new Date(updated_at) : row.last_updated_at, markUpdatesAsNew, row.id]
+        [
+          title, 
+          thumbnail_url, 
+          high_quality_image_url || null, 
+          artwork_url, 
+          newUploadDate, 
+          updated_at ? new Date(updated_at) : row.last_updated_at, 
+          markUpdatesAsNew,
+          favoriteStatus,
+          row.id
+        ]
       );
       const updated = updateResult.rows[0];
       return {
@@ -465,7 +492,7 @@ export async function addArtwork(
         upload_date: row.upload_date ? row.upload_date.toISOString() : undefined,
         last_updated_at: row.last_updated_at ? row.last_updated_at.toISOString() : undefined,
         is_new: row.is_new,
-        is_favorite: row.is_favorite || 0,
+        is_favorite: favoriteStatus,
         discovered_at: row.discovered_at.toISOString()
       },
       isNew: false,
@@ -482,9 +509,11 @@ export async function addArtwork(
     };
   }
 
+  // Insert new artwork with favorite status if it should be a favorite
+  const favoriteValue = shouldBeFavorite ? 1 : 0;
   const result = await query(
-    `INSERT INTO artworks (user_id, artist_id, artwork_id, title, thumbnail_url, high_quality_image_url, artwork_url, upload_date, last_updated_at, is_new)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1) RETURNING *`,
+    `INSERT INTO artworks (user_id, artist_id, artwork_id, title, thumbnail_url, high_quality_image_url, artwork_url, upload_date, last_updated_at, is_new, is_favorite)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10) RETURNING *`,
     [
       user_id,
       artist_id,
@@ -494,7 +523,8 @@ export async function addArtwork(
       high_quality_image_url || null,
       artwork_url,
       upload_date ? new Date(upload_date) : null,
-      updated_at ? new Date(updated_at) : upload_date ? new Date(upload_date) : new Date()
+      updated_at ? new Date(updated_at) : upload_date ? new Date(upload_date) : new Date(),
+      favoriteValue
     ]
   );
 
@@ -608,21 +638,111 @@ export async function getPublicFeaturedArtworks(limit: number = 10): Promise<Pub
 }
 
 export async function toggleFavorite(id: number, user_id: number): Promise<boolean> {
-  // First check if artwork exists and belongs to user
-  const checkResult = await query('SELECT is_favorite FROM artworks WHERE id = $1 AND user_id = $2', [id, user_id]);
+  // First check if artwork exists and belongs to user, get artist info too
+  const checkResult = await query(
+    `SELECT aw.artwork_id, aw.is_favorite, aw.artwork_url, a.username as artist_username
+     FROM artworks aw
+     JOIN artists a ON aw.artist_id = a.id
+     WHERE aw.id = $1 AND aw.user_id = $2`,
+    [id, user_id]
+  );
   
   if (checkResult.rows.length === 0) {
     return false;
   }
   
-  const currentFavorite = checkResult.rows[0].is_favorite || 0;
+  const row = checkResult.rows[0];
+  const currentFavorite = row.is_favorite || 0;
   const newFavorite = currentFavorite === 1 ? 0 : 1;
   
+  // Update artwork favorite status
   const result = await query(
     'UPDATE artworks SET is_favorite = $1 WHERE id = $2 AND user_id = $3',
     [newFavorite, id, user_id]
   );
   
-  return (result.rowCount ?? 0) > 0;
+  if ((result.rowCount ?? 0) > 0) {
+    // Also update persistent favorites table
+    if (newFavorite === 1) {
+      // Add to persistent favorites
+      await addPersistentFavorite(
+        user_id,
+        row.artist_username,
+        row.artwork_id,
+        row.artwork_url
+      );
+    } else {
+      // Remove from persistent favorites
+      await removePersistentFavorite(user_id, row.artist_username, row.artwork_id);
+    }
+    return true;
+  }
+  
+  return false;
+}
+
+// Add favorite to persistent storage (survives deletions)
+export async function addPersistentFavorite(
+  user_id: number,
+  artist_username: string,
+  artwork_id: string,
+  artwork_url: string
+): Promise<void> {
+  await query(
+    `INSERT INTO persistent_favorites (user_id, artist_username, artwork_id, artwork_url)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, artist_username, artwork_id) DO NOTHING`,
+    [user_id, artist_username.toLowerCase(), artwork_id, artwork_url]
+  );
+}
+
+// Remove favorite from persistent storage
+export async function removePersistentFavorite(
+  user_id: number,
+  artist_username: string,
+  artwork_id: string
+): Promise<void> {
+  await query(
+    `DELETE FROM persistent_favorites 
+     WHERE user_id = $1 AND artist_username = $2 AND artwork_id = $3`,
+    [user_id, artist_username.toLowerCase(), artwork_id]
+  );
+}
+
+// Check if artwork should be a favorite (from persistent storage)
+export async function isPersistentFavorite(
+  user_id: number,
+  artist_username: string,
+  artwork_id: string
+): Promise<boolean> {
+  const result = await query(
+    `SELECT 1 FROM persistent_favorites
+     WHERE user_id = $1 AND artist_username = $2 AND artwork_id = $3
+     LIMIT 1`,
+    [user_id, artist_username.toLowerCase(), artwork_id]
+  );
+  return result.rows.length > 0;
+}
+
+// Restore favorite status for all artworks that match persistent favorites
+export async function restoreFavoritesFromPersistent(user_id: number): Promise<number> {
+  const result = await query(
+    `UPDATE artworks aw
+     SET is_favorite = 1
+     FROM artists a, persistent_favorites pf
+     WHERE aw.user_id = $1
+       AND aw.artist_id = a.id
+       AND pf.user_id = aw.user_id
+       AND LOWER(pf.artist_username) = LOWER(a.username)
+       AND pf.artwork_id = aw.artwork_id
+       AND (aw.is_favorite IS NULL OR aw.is_favorite = 0)`,
+    [user_id]
+  );
+  return result.rowCount || 0;
+}
+
+// Batch restore favorites for a user (useful after bulk import)
+export async function restoreAllFavoritesForUser(user_id: number): Promise<number> {
+  return await restoreFavoritesFromPersistent(user_id);
 }
 
