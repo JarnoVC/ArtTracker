@@ -8,7 +8,7 @@ import ScrapeProgressModal from './components/ScrapeProgressModal';
 import SyncProgressModal from './components/SyncProgressModal';
 import LoginModal from './components/LoginModal';
 import SettingsModal from './components/SettingsModal';
-import { Artist, Artwork, getArtists, getArtworks, getNewCount, importFollowing, scrapeArtist, getCurrentUser, logout, getAuthToken, User } from './api';
+import { Artist, Artwork, getArtists, getArtworks, getNewCount, importFollowing, scrapeArtist, getCurrentUser, logout, getAuthToken, User, wakeUpBackend } from './api';
 import { loadCachedData, saveCachedData, clearCachedData } from './offlineCache.ts';
 import { deduplicateRequest } from './utils/requestDeduplication';
 import './App.css';
@@ -53,7 +53,10 @@ function App() {
     const token = getAuthToken();
     if (token) {
       if (navigator.onLine) {
-        checkAuth();
+        // Wake up backend before checking auth (important for Render free tier)
+        wakeUpBackend().then(() => {
+          checkAuth();
+        });
       } else {
         const cached = loadCachedData();
         if (cached?.user) {

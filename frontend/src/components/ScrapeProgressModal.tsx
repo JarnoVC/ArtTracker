@@ -8,8 +8,10 @@ import './ScrapeProgressModal.css';
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 // Create axios instance with base URL and default auth header
+// Use same timeout as api.ts to handle Render free tier wake-up
 const apiClient = axios.create({
   baseURL: API_BASE,
+  timeout: 120000, // 2 minutes to allow backend to wake up
   headers: {
     'Content-Type': 'application/json'
   }
